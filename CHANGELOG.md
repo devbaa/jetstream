@@ -1,6 +1,11 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/jetstream/compare/v5.3.6...5.x)
+## [Unreleased](https://github.com/laravel/jetstream/compare/v5.3.7...5.x)
+
+## [v5.3.7](https://github.com/laravel/jetstream/compare/v5.3.6...v5.3.7) - 2025-06-16
+
+* Disable two factor authentication confirm button when form is processing by [@coreyhn](https://github.com/coreyhn) in https://github.com/laravel/jetstream/pull/1573
+* [5.x] Fix adding middleware to the `web` group during installation by [@crynobone](https://github.com/crynobone) in https://github.com/laravel/jetstream/pull/1577
 
 ## [v5.3.6](https://github.com/laravel/jetstream/compare/v5.3.5...v5.3.6) - 2025-03-24
 
