@@ -1,6 +1,12 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/jetstream/compare/v5.3.8...5.x)
+## [Unreleased](https://github.com/laravel/jetstream/compare/v5.4.0...5.x)
+
+## [v5.4.0](https://github.com/laravel/jetstream/compare/v5.3.8...v5.4.0) - 2025-11-25
+
+* Update return type of `Laravel\Jetstream\Jetstream::findRole()` method to nullable by [@crynobone](https://github.com/crynobone) in https://github.com/laravel/jetstream/pull/1586
+* Query team_id on delete by [@mauro-baptista](https://github.com/mauro-baptista) in https://github.com/laravel/jetstream/pull/1587
+* [5.x] PHP 8.5 Compatibility by [@crynobone](https://github.com/crynobone) in https://github.com/laravel/jetstream/pull/1588
 
 ## [v5.3.8](https://github.com/laravel/jetstream/compare/v5.3.7...v5.3.8) - 2025-07-18
 
