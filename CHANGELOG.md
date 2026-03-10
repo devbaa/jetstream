@@ -1,6 +1,13 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/jetstream/compare/v5.4.0...5.x)
+## [Unreleased](https://github.com/laravel/jetstream/compare/v5.5.0...5.x)
+
+## [v5.5.0](https://github.com/laravel/jetstream/compare/v5.4.0...v5.5.0) - 2026-03-05
+
+* Use dynamic foreign key in `cancelTeamInvitation` by [@inkarnation](https://github.com/inkarnation) in https://github.com/laravel/jetstream/pull/1590
+* Bump [@vitejs](https://github.com/vitejs)/plugin-vue to suport Vite 7 by [@osbre](https://github.com/osbre) in https://github.com/laravel/jetstream/pull/1593
+* Fix stubs workflow in CI by [@osbre](https://github.com/osbre) in https://github.com/laravel/jetstream/pull/1594
+* Laravel 13 support by [@osbre](https://github.com/osbre) in https://github.com/laravel/jetstream/pull/1596
 
 ## [v5.4.0](https://github.com/laravel/jetstream/compare/v5.3.8...v5.4.0) - 2025-11-25
 
