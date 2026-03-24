@@ -1,6 +1,10 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/jetstream/compare/v5.5.1...5.x)
+## [Unreleased](https://github.com/laravel/jetstream/compare/v5.5.2...5.x)
+
+## [v5.5.2](https://github.com/laravel/jetstream/compare/v5.5.1...v5.5.2) - 2026-03-20
+
+* [5.x] Expand symfony/console version to include 8.0 by [@SamuelMwangiW](https://github.com/SamuelMwangiW) in https://github.com/laravel/jetstream/pull/1599
 
 ## [v5.5.1](https://github.com/laravel/jetstream/compare/v5.5.0...v5.5.1) - 2026-03-10
 
