@@ -1,6 +1,10 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/jetstream/compare/v5.5.2...5.x)
+## [Unreleased](https://github.com/laravel/jetstream/compare/v5.5.3...5.x)
+
+## [v5.5.3](https://github.com/laravel/jetstream/compare/v5.5.2...v5.5.3) - 2026-05-19
+
+* Fix: Remove bootstrap.js import for Laravel 13+ in Inertia stack by [@Karthi282k](https://github.com/Karthi282k) in https://github.com/laravel/jetstream/pull/1602
 
 ## [v5.5.2](https://github.com/laravel/jetstream/compare/v5.5.1...v5.5.2) - 2026-03-20
 
