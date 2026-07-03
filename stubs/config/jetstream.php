@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Laravel\Jetstream\Features;
 use Laravel\Jetstream\Http\Middleware\AuthenticateSession;
 
@@ -16,7 +18,7 @@ return [
     |
     */
 
-    'stack' => 'inertia',
+    'stack' => 'livewire',
 
     /*
     |--------------------------------------------------------------------------
@@ -80,6 +82,19 @@ return [
     'tenants' => [
         'self_service_creation' => true,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | System Administrator
+    |--------------------------------------------------------------------------
+    |
+    | The SystemAdminSeeder flags the user with this email address as the
+    | application's system administrator, granting access to the tenant
+    | administration screens.
+    |
+    */
+
+    'admin_email' => env('JETSTREAM_ADMIN_EMAIL'),
 
     /*
     |--------------------------------------------------------------------------

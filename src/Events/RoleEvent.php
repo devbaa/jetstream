@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -13,14 +15,14 @@ abstract class RoleEvent
     /**
      * The database role instance.
      *
-     * @var \App\Models\Role
+     * @var \Laravel\Jetstream\DatabaseRole
      */
     public $role;
 
     /**
      * Create a new event instance.
      *
-     * @param  \App\Models\Role  $role
+     * @param  \Laravel\Jetstream\DatabaseRole  $role
      * @return void
      */
     public function __construct($role)

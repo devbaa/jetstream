@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tests;
 
 use App\Actions\Jetstream\CreateTeam;
@@ -37,10 +39,6 @@ class DeleteUserWithTeamsTest extends OrchestraTestCase
         $this->assertSame(2, DB::table('teams')->count());
         $this->assertSame(1, DB::table('team_user')->count());
 
-        copy(__DIR__.'/../stubs/app/Actions/Jetstream/DeleteUserWithTeams.php', $fixture = __DIR__.'/Fixtures/DeleteUser.php');
-
-        require $fixture;
-
         $action = new DeleteUser(new DeleteTeam);
 
         $action->delete($team->owner);
@@ -48,8 +46,6 @@ class DeleteUserWithTeamsTest extends OrchestraTestCase
         $this->assertNull($team->owner->fresh());
         $this->assertSame(1, DB::table('teams')->count());
         $this->assertSame(0, DB::table('team_user')->count());
-
-        @unlink($fixture);
     }
 
     protected function createTeam()

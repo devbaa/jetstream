@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Support\Facades\Auth;
@@ -10,6 +12,9 @@ use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\RoleRegistry;
 use Livewire\Component;
 
+/**
+ * @property-read \App\Models\User|null $user
+ */
 class RoleManager extends Component
 {
     /**

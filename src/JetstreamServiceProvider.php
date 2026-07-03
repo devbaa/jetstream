@@ -1,18 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
-use App\Http\Middleware\HandleInertiaRequests;
-use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\View\Compilers\BladeCompiler;
-use Inertia\Inertia;
-use Laravel\Fortify\Events\PasswordUpdatedViaController;
+use Laravel\Fortify\Features as FortifyFeatures;
 use Laravel\Fortify\Fortify;
 use Laravel\Jetstream\Http\Livewire\Admin\TenantManager as AdminTenantManager;
 use Laravel\Jetstream\Http\Livewire\ApiTokenManager;
@@ -24,6 +19,7 @@ use Laravel\Jetstream\Http\Livewire\DeleteTenantForm;
 use Laravel\Jetstream\Http\Livewire\DeleteUserForm;
 use Laravel\Jetstream\Http\Livewire\LogoutOtherBrowserSessionsForm;
 use Laravel\Jetstream\Http\Livewire\NavigationMenu;
+use Laravel\Jetstream\Http\Livewire\PasskeyManager;
 use Laravel\Jetstream\Http\Livewire\Portal\AccountMemberManager;
 use Laravel\Jetstream\Http\Livewire\Portal\UpdateAccountNameForm;
 use Laravel\Jetstream\Http\Livewire\RoleManager;
@@ -37,7 +33,6 @@ use Laravel\Jetstream\Http\Livewire\UpdateTenantNameForm;
 use Laravel\Jetstream\Http\Middleware\EnsureCustomerAccountContext;
 use Laravel\Jetstream\Http\Middleware\EnsureTenantContext;
 use Laravel\Jetstream\Http\Middleware\EnsureUserIsSystemAdmin;
-use Laravel\Jetstream\Http\Middleware\ShareInertiaData;
 use Laravel\Jetstream\Tenancy\CustomerContext;
 use Laravel\Jetstream\Tenancy\TenantContext;
 use Livewire\Livewire;
@@ -96,17 +91,17 @@ class JetstreamServiceProvider extends ServiceProvider
             ]);
         });
 
-        if (config('jetstream.stack') === 'inertia' && class_exists(Inertia::class)) {
-            $this->bootInertia();
-        }
-
-        if (config('jetstream.stack') === 'livewire' && class_exists(Livewire::class)) {
+        if (class_exists(Livewire::class)) {
             Livewire::component('navigation-menu', NavigationMenu::class);
             Livewire::component('profile.update-profile-information-form', UpdateProfileInformationForm::class);
             Livewire::component('profile.update-password-form', UpdatePasswordForm::class);
             Livewire::component('profile.two-factor-authentication-form', TwoFactorAuthenticationForm::class);
             Livewire::component('profile.logout-other-browser-sessions-form', LogoutOtherBrowserSessionsForm::class);
             Livewire::component('profile.delete-user-form', DeleteUserForm::class);
+
+            if (FortifyFeatures::canManagePasskeys()) {
+                Livewire::component('profile.passkey-manager', PasskeyManager::class);
+            }
 
             if (Features::hasApiFeatures()) {
                 Livewire::component('api.api-token-manager', ApiTokenManager::class);
@@ -188,15 +183,8 @@ class JetstreamServiceProvider extends ServiceProvider
         ], 'jetstream-tenant-migrations');
 
         $this->publishes([
-            __DIR__.'/../routes/'.config('jetstream.stack').'.php' => base_path('routes/jetstream.php'),
+            __DIR__.'/../routes/livewire.php' => base_path('routes/jetstream.php'),
         ], 'jetstream-routes');
-
-        $this->publishes([
-            __DIR__.'/../stubs/inertia/resources/js/Pages/Auth' => resource_path('js/Pages/Auth'),
-            __DIR__.'/../stubs/inertia/resources/js/Components/AuthenticationCard.vue' => resource_path('js/Components/AuthenticationCard.vue'),
-            __DIR__.'/../stubs/inertia/resources/js/Components/AuthenticationCardLogo.vue' => resource_path('js/Components/AuthenticationCardLogo.vue'),
-            __DIR__.'/../stubs/inertia/resources/js/Components/Checkbox.vue' => resource_path('js/Components/Checkbox.vue'),
-        ], 'jetstream-inertia-auth-pages');
     }
 
     /**
@@ -212,7 +200,7 @@ class JetstreamServiceProvider extends ServiceProvider
                 'domain' => config('jetstream.domain', null),
                 'prefix' => config('jetstream.prefix', config('jetstream.path')),
             ], function () {
-                $this->loadRoutesFrom(__DIR__.'/../routes/'.config('jetstream.stack').'.php');
+                $this->loadRoutesFrom(__DIR__.'/../routes/livewire.php');
             });
         }
     }
@@ -231,66 +219,5 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->commands([
             Console\InstallCommand::class,
         ]);
-    }
-
-    /**
-     * Boot any Inertia related services.
-     *
-     * @return void
-     */
-    protected function bootInertia()
-    {
-        $kernel = $this->app->make(Kernel::class);
-
-        $kernel->appendMiddlewareToGroup('web', ShareInertiaData::class);
-        $kernel->appendToMiddlewarePriority(ShareInertiaData::class);
-
-        if (class_exists(HandleInertiaRequests::class)) {
-            $kernel->appendToMiddlewarePriority(HandleInertiaRequests::class);
-        }
-
-        Event::listen(function (PasswordUpdatedViaController $event) {
-            if (request()->hasSession()) {
-                request()->session()->put(['password_hash_sanctum' => Auth::user()->getAuthPassword()]);
-            }
-        });
-
-        Fortify::loginView(function () {
-            return Inertia::render('Auth/Login', [
-                'canResetPassword' => Route::has('password.request'),
-                'status' => session('status'),
-            ]);
-        });
-
-        Fortify::requestPasswordResetLinkView(function () {
-            return Inertia::render('Auth/ForgotPassword', [
-                'status' => session('status'),
-            ]);
-        });
-
-        Fortify::resetPasswordView(function (Request $request) {
-            return Inertia::render('Auth/ResetPassword', [
-                'email' => $request->input('email'),
-                'token' => $request->route('token'),
-            ]);
-        });
-
-        Fortify::registerView(function () {
-            return Inertia::render('Auth/Register');
-        });
-
-        Fortify::verifyEmailView(function () {
-            return Inertia::render('Auth/VerifyEmail', [
-                'status' => session('status'),
-            ]);
-        });
-
-        Fortify::twoFactorChallengeView(function () {
-            return Inertia::render('Auth/TwoFactorChallenge');
-        });
-
-        Fortify::confirmPasswordView(function () {
-            return Inertia::render('Auth/ConfirmPassword');
-        });
     }
 }

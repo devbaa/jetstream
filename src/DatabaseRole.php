@@ -1,10 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Jetstream\Tenancy\BelongsToTenant;
 
+/**
+ * @property int $id
+ * @property int|null $tenant_id
+ * @property string $key
+ * @property string $name
+ * @property string|null $description
+ * @property array<int, string> $permissions
+ */
 abstract class DatabaseRole extends Model
 {
     use BelongsToTenant;
@@ -29,7 +39,7 @@ abstract class DatabaseRole extends Model
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = [
         'tenant_id',
@@ -42,7 +52,7 @@ abstract class DatabaseRole extends Model
     /**
      * The attributes that should be cast.
      *
-     * @var array
+     * @var array<string, string>
      */
     protected $casts = [
         'permissions' => 'array',

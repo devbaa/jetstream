@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tenancy;
 
 use Illuminate\Database\Eloquent\Builder;
@@ -30,15 +32,4 @@ class TenantScope implements Scope
         });
     }
 
-    /**
-     * Extend the query builder with the needed functions.
-     *
-     * @return void
-     */
-    public function extend(Builder $builder)
-    {
-        $builder->macro('withoutTenancy', function (Builder $builder) {
-            return $builder->withoutGlobalScope($this);
-        });
-    }
 }

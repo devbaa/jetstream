@@ -1,10 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Jetstream\Tenancy\BelongsToTenant;
 
+/**
+ * @property int $id
+ * @property int $tenant_id
+ * @property int|null $customer_account_id
+ * @property string $email
+ */
 abstract class CustomerInvitation extends Model
 {
     use BelongsToTenant;
@@ -12,7 +20,7 @@ abstract class CustomerInvitation extends Model
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = [
         'email',
@@ -24,7 +32,7 @@ abstract class CustomerInvitation extends Model
      * Invitations without a customer account invite the recipient to create
      * a fresh account of their own within the tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Laravel\Jetstream\CustomerAccount, $this>
      */
     public function customerAccount()
     {

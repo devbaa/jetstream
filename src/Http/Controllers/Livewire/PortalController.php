@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Controllers\Livewire;
 
 use Illuminate\Http\Request;
@@ -35,7 +37,7 @@ class PortalController extends Controller
     {
         $account = app(CustomerContext::class)->current();
 
-        abort_unless($account, 403);
+        abort_if(is_null($account), 403);
 
         return view('portal.account', [
             'user' => $request->user(),

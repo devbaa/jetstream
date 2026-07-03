@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -13,14 +15,14 @@ abstract class CustomerAccountEvent
     /**
      * The customer account instance.
      *
-     * @var \App\Models\CustomerAccount
+     * @var \Laravel\Jetstream\CustomerAccount
      */
     public $account;
 
     /**
      * Create a new event instance.
      *
-     * @param  \App\Models\CustomerAccount  $account
+     * @param  \Laravel\Jetstream\CustomerAccount  $account
      * @return void
      */
     public function __construct($account)

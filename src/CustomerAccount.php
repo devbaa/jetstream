@@ -1,10 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Jetstream\Tenancy\BelongsToTenant;
 
+/**
+ * @property int $id
+ * @property int $tenant_id
+ * @property int $user_id
+ * @property string $name
+ */
 abstract class CustomerAccount extends Model
 {
     use BelongsToTenant;
@@ -12,7 +20,7 @@ abstract class CustomerAccount extends Model
     /**
      * Get the owner of the customer account.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Illuminate\Foundation\Auth\User, $this>
      */
     public function owner()
     {
@@ -32,7 +40,7 @@ abstract class CustomerAccount extends Model
     /**
      * Get all of the users that belong to the customer account.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Illuminate\Foundation\Auth\User, $this>
      */
     public function users()
     {
@@ -67,7 +75,7 @@ abstract class CustomerAccount extends Model
     /**
      * Get all of the pending member invitations for the customer account.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\CustomerInvitation, $this>
      */
     public function customerInvitations()
     {

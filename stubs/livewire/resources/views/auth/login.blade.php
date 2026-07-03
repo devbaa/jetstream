@@ -17,7 +17,7 @@
 
             <div>
                 <x-label for="email" value="{{ __('Email') }}" />
-                <x-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
+                <x-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username webauthn" />
             </div>
 
             <div class="mt-4">
@@ -44,5 +44,49 @@
                 </x-button>
             </div>
         </form>
+
+        @if (Laravel\Fortify\Features::enabled(Laravel\Fortify\Features::passkeys()))
+            <div class="mt-4">
+                <x-secondary-button type="button" class="w-full justify-center" onclick="signInWithPasskey()">
+                    {{ __('Sign in with a passkey') }}
+                </x-secondary-button>
+
+                <p id="passkey-login-error" class="mt-2 text-sm text-red-600 dark:text-red-400 hidden"></p>
+            </div>
+
+            <script>
+                function signInWithPasskey() {
+                    const error = document.getElementById('passkey-login-error');
+
+                    error.classList.add('hidden');
+
+                    if (! window.Passkeys || ! window.Passkeys.isSupported()) {
+                        error.textContent = @js(__('Your browser does not support passkeys.'));
+                        error.classList.remove('hidden');
+
+                        return;
+                    }
+
+                    window.Passkeys.verify()
+                        .then((response) => window.location.href = response.redirect ?? @js(config('fortify.home', '/dashboard')))
+                        .catch((failure) => {
+                            error.textContent = failure?.message ?? @js(__('The passkey could not be verified.'));
+                            error.classList.remove('hidden');
+                        });
+                }
+
+                document.addEventListener('DOMContentLoaded', () => {
+                    if (window.Passkeys && window.Passkeys.isSupported()) {
+                        window.Passkeys.autofill()
+                            .then((response) => {
+                                if (response) {
+                                    window.location.href = response.redirect ?? @js(config('fortify.home', '/dashboard'));
+                                }
+                            })
+                            .catch(() => {});
+                    }
+                });
+            </script>
+        @endif
     </x-authentication-card>
 </x-guest-layout>

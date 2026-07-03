@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tests\Fixtures;
 
 use App\Models\CustomerAccount;

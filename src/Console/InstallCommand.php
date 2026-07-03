@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Console;
 
 use Exception;
@@ -29,14 +31,11 @@ class InstallCommand extends Command implements PromptsForMissingInput
      *
      * @var string
      */
-    protected $signature = 'jetstream:install {stack : The development stack that should be installed (inertia,livewire)}
+    protected $signature = 'jetstream:install {stack : The development stack that should be installed (livewire)}
                                               {--dark : Indicate that dark mode support should be installed}
-                                              {--teams : Indicates if team support should be installed}
-                                              {--saas : Indicates if multi-tenant SaaS support should be installed (implies teams, livewire only)}
                                               {--api : Indicates if API support should be installed}
                                               {--verification : Indicates if email verification support should be installed}
                                               {--pest : Indicates if Pest should be installed}
-                                              {--ssr : Indicates if Inertia SSR support should be installed}
                                               {--composer=global : Absolute path to the Composer binary which should be used to install packages}';
 
     /**
@@ -53,14 +52,8 @@ class InstallCommand extends Command implements PromptsForMissingInput
      */
     public function handle()
     {
-        if (! in_array($this->argument('stack'), ['inertia', 'livewire'])) {
-            $this->components->error('Invalid stack. Supported stacks are [inertia] and [livewire].');
-
-            return 1;
-        }
-
-        if ($this->option('saas') && $this->argument('stack') !== 'livewire') {
-            $this->components->error('The --saas option currently supports only the livewire stack.');
+        if ($this->argument('stack') !== 'livewire') {
+            $this->components->error('Invalid stack. The only supported stack is [livewire].');
 
             return 1;
         }
@@ -72,6 +65,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-config', '--force' => true]);
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-support', '--force' => true]);
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
+        $this->callSilent('vendor:publish', ['--tag' => 'passkeys-migrations', '--force' => true]);
 
         // Storage...
         $this->callSilent('storage:link');
@@ -100,14 +94,8 @@ class InstallCommand extends Command implements PromptsForMissingInput
         }
 
         // Install Stack...
-        if ($this->argument('stack') === 'livewire') {
-            if (! $this->installLivewireStack()) {
-                return 1;
-            }
-        } elseif ($this->argument('stack') === 'inertia') {
-            if (! $this->installInertiaStack()) {
-                return 1;
-            }
+        if (! $this->installLivewireStack()) {
+            return 1;
         }
 
         // Emails...
@@ -136,6 +124,8 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/PasswordConfirmationTest.php', base_path('tests/Feature/PasswordConfirmationTest.php'));
         copy($stubs.'/PasswordResetTest.php', base_path('tests/Feature/PasswordResetTest.php'));
         copy($stubs.'/RegistrationTest.php', base_path('tests/Feature/RegistrationTest.php'));
+
+        return 0;
     }
 
     /**
@@ -165,12 +155,10 @@ class InstallCommand extends Command implements PromptsForMissingInput
             '--without-migration-prompt' => true,
         ]);
 
-        // Update Configuration...
-        $this->replaceInFile('inertia', 'livewire', config_path('jetstream.php'));
-
         // NPM Packages...
         $this->updateNodePackages(function ($packages) {
             return [
+                '@laravel/passkeys' => '^0.2.0',
                 '@tailwindcss/forms' => '^0.5.7',
                 '@tailwindcss/typography' => '^0.5.10',
                 'autoprefixer' => '^10.4.16',
@@ -251,6 +239,11 @@ class InstallCommand extends Command implements PromptsForMissingInput
         // Assets...
         copy(__DIR__.'/../../stubs/resources/css/app.css', resource_path('css/app.css'));
 
+        if (file_exists(resource_path('js/app.js')) &&
+            ! str_contains((string) file_get_contents(resource_path('js/app.js')), '@laravel/passkeys')) {
+            (new Filesystem)->append(resource_path('js/app.js'), $this->passkeysScript());
+        }
+
         // Tests...
         $stubs = $this->getTestStubsPath();
 
@@ -262,16 +255,11 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/livewire/ProfileInformationTest.php', base_path('tests/Feature/ProfileInformationTest.php'));
         copy($stubs.'/livewire/TwoFactorAuthenticationSettingsTest.php', base_path('tests/Feature/TwoFactorAuthenticationSettingsTest.php'));
         copy($stubs.'/livewire/UpdatePasswordTest.php', base_path('tests/Feature/UpdatePasswordTest.php'));
+        copy($stubs.'/livewire/PasskeyManagementTest.php', base_path('tests/Feature/PasskeyManagementTest.php'));
 
-        // Teams...
-        if ($this->option('teams') || $this->option('saas')) {
-            $this->installLivewireTeamStack();
-        }
-
-        // SaaS...
-        if ($this->option('saas')) {
-            $this->installLivewireSaasStack();
-        }
+        // Teams & SaaS...
+        $this->installLivewireTeamStack();
+        $this->installLivewireSaasStack();
 
         if (! $this->option('dark')) {
             $this->removeDarkClasses((new Finder)
@@ -323,7 +311,32 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/livewire/UpdateTeamMemberRoleTest.php', base_path('tests/Feature/UpdateTeamMemberRoleTest.php'));
         copy($stubs.'/livewire/UpdateTeamNameTest.php', base_path('tests/Feature/UpdateTeamNameTest.php'));
 
-        $this->ensureApplicationIsTeamCompatible();
+        // Publish Team Migrations...
+        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-team-migrations', '--force' => true]);
+
+        // Configuration...
+        $this->replaceInFile('// Features::teams([\'invitations\' => true])', 'Features::teams([\'invitations\' => true])', config_path('jetstream.php'));
+
+        // Directories...
+        (new Filesystem)->ensureDirectoryExists(app_path('Actions/Jetstream'));
+        (new Filesystem)->ensureDirectoryExists(app_path('Events'));
+        (new Filesystem)->ensureDirectoryExists(app_path('Policies'));
+
+        // Models...
+        copy(__DIR__.'/../../stubs/app/Models/Membership.php', app_path('Models/Membership.php'));
+        copy(__DIR__.'/../../stubs/app/Models/TeamInvitation.php', app_path('Models/TeamInvitation.php'));
+
+        // Actions...
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/AddTeamMember.php', app_path('Actions/Jetstream/AddTeamMember.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/CreateTeam.php', app_path('Actions/Jetstream/CreateTeam.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/DeleteTeam.php', app_path('Actions/Jetstream/DeleteTeam.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/InviteTeamMember.php', app_path('Actions/Jetstream/InviteTeamMember.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/RemoveTeamMember.php', app_path('Actions/Jetstream/RemoveTeamMember.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/UpdateTeamName.php', app_path('Actions/Jetstream/UpdateTeamName.php'));
+
+        // Factories...
+        copy(__DIR__.'/../../database/factories/UserFactory.php', base_path('database/factories/UserFactory.php'));
+        copy(__DIR__.'/../../database/factories/TeamFactory.php', base_path('database/factories/TeamFactory.php'));
     }
 
     /**
@@ -374,16 +387,16 @@ class InstallCommand extends Command implements PromptsForMissingInput
         $this->replaceInFile('// Features::tenants([\'portal\' => true, \'customer-registration\' => true])', 'Features::tenants([\'portal\' => true, \'customer-registration\' => true])', config_path('jetstream.php'));
 
         // Service Providers...
-        copy(__DIR__.'/../../stubs/app/Providers/JetstreamWithSaasServiceProvider.php', app_path('Providers/JetstreamServiceProvider.php'));
+        copy(__DIR__.'/../../stubs/app/Providers/JetstreamServiceProvider.php', app_path('Providers/JetstreamServiceProvider.php'));
 
         // Models...
-        copy(__DIR__.'/../../stubs/app/Models/TeamWithTenant.php', app_path('Models/Team.php'));
+        copy(__DIR__.'/../../stubs/app/Models/Team.php', app_path('Models/Team.php'));
         copy(__DIR__.'/../../stubs/app/Models/Tenant.php', app_path('Models/Tenant.php'));
         copy(__DIR__.'/../../stubs/app/Models/TenantMembership.php', app_path('Models/TenantMembership.php'));
         copy(__DIR__.'/../../stubs/app/Models/Role.php', app_path('Models/Role.php'));
         copy(__DIR__.'/../../stubs/app/Models/CustomerAccount.php', app_path('Models/CustomerAccount.php'));
         copy(__DIR__.'/../../stubs/app/Models/CustomerInvitation.php', app_path('Models/CustomerInvitation.php'));
-        copy(__DIR__.'/../../stubs/app/Models/UserWithSaas.php', app_path('Models/User.php'));
+        copy(__DIR__.'/../../stubs/app/Models/User.php', app_path('Models/User.php'));
 
         // Actions...
         copy(__DIR__.'/../../stubs/app/Actions/Jetstream/CreateTenant.php', app_path('Actions/Jetstream/CreateTenant.php'));
@@ -404,9 +417,25 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy(__DIR__.'/../../database/factories/CustomerAccountFactory.php', base_path('database/factories/CustomerAccountFactory.php'));
 
         // Seeders...
-        copy(__DIR__.'/../../database/seeders/DatabaseSeederWithSaas.php', base_path('database/seeders/DatabaseSeeder.php'));
+        copy(__DIR__.'/../../database/seeders/DatabaseSeeder.php', base_path('database/seeders/DatabaseSeeder.php'));
         copy(__DIR__.'/../../database/seeders/DefaultRolesSeeder.php', base_path('database/seeders/DefaultRolesSeeder.php'));
         copy(__DIR__.'/../../database/seeders/SystemAdminSeeder.php', base_path('database/seeders/SystemAdminSeeder.php'));
+    }
+
+    /**
+     * Get the passkeys client bootstrapping that should be appended to app.js.
+     *
+     * @return string
+     */
+    protected function passkeysScript()
+    {
+        return <<<'EOT'
+
+import { Passkeys } from '@laravel/passkeys';
+
+window.Passkeys = Passkeys;
+
+EOT;
     }
 
     /**
@@ -429,303 +458,6 @@ Route::middleware([
 });
 
 EOF;
-    }
-
-    /**
-     * Install the Inertia stack into the application.
-     *
-     * @return bool
-     */
-    protected function installInertiaStack()
-    {
-        // Install Inertia...
-        if (! $this->requireComposerPackages('inertiajs/inertia-laravel:^2.0', 'tightenco/ziggy:^2.0')) {
-            return false;
-        }
-
-        $this->call('install:api', [
-            '--without-migration-prompt' => true,
-        ]);
-
-        // Install NPM packages...
-        $this->updateNodePackages(function ($packages) {
-            return [
-                '@inertiajs/vue3' => '^2.0',
-                '@tailwindcss/forms' => '^0.5.7',
-                '@tailwindcss/typography' => '^0.5.10',
-                '@vitejs/plugin-vue' => '^6.0.4',
-                'autoprefixer' => '^10.4.16',
-                'postcss' => '^8.4.32',
-                'tailwindcss' => '^3.4.0',
-                'vue' => '^3.3.13',
-            ] + $packages;
-        });
-
-        // Tailwind Configuration...
-        copy(__DIR__.'/../../stubs/inertia/tailwind.config.js', base_path('tailwind.config.js'));
-        copy(__DIR__.'/../../stubs/inertia/postcss.config.js', base_path('postcss.config.js'));
-        copy(__DIR__.'/../../stubs/inertia/vite.config.js', base_path('vite.config.js'));
-
-        // jsconfig.json...
-        copy(__DIR__.'/../../stubs/inertia/jsconfig.json', base_path('jsconfig.json'));
-
-        // Directories...
-        (new Filesystem)->ensureDirectoryExists(app_path('Actions/Fortify'));
-        (new Filesystem)->ensureDirectoryExists(app_path('Actions/Jetstream'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('css'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('js/Components'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('js/Layouts'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('js/Pages'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('js/Pages/API'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('js/Pages/Auth'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('js/Pages/Profile'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('views'));
-        (new Filesystem)->ensureDirectoryExists(resource_path('markdown'));
-
-        (new Filesystem)->deleteDirectory(resource_path('sass'));
-
-        // Terms Of Service / Privacy Policy...
-        copy(__DIR__.'/../../stubs/resources/markdown/terms.md', resource_path('markdown/terms.md'));
-        copy(__DIR__.'/../../stubs/resources/markdown/policy.md', resource_path('markdown/policy.md'));
-
-        // Service Providers...
-        copy(__DIR__.'/../../stubs/app/Providers/JetstreamServiceProvider.php', app_path('Providers/JetstreamServiceProvider.php'));
-        ServiceProvider::addProviderToBootstrapFile('App\Providers\JetstreamServiceProvider');
-
-        // Middleware...
-        (new Filesystem)->ensureDirectoryExists(app_path('Http/Middleware'));
-        (new Process([$this->phpBinary(), 'artisan', 'inertia:middleware', 'HandleInertiaRequests', '--force'], base_path()))
-            ->setTimeout(null)
-            ->run(function ($type, $output) {
-                $this->output->write($output);
-            });
-
-        $this->installMiddleware([
-            '\App\Http\Middleware\HandleInertiaRequests::class',
-            '\Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class',
-        ]);
-
-        // Models...
-        copy(__DIR__.'/../../stubs/app/Models/User.php', app_path('Models/User.php'));
-
-        // Factories...
-        copy(__DIR__.'/../../database/factories/UserFactory.php', base_path('database/factories/UserFactory.php'));
-
-        // Actions...
-        copy(__DIR__.'/../../stubs/app/Actions/Fortify/CreateNewUser.php', app_path('Actions/Fortify/CreateNewUser.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Fortify/UpdateUserProfileInformation.php', app_path('Actions/Fortify/UpdateUserProfileInformation.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/DeleteUser.php', app_path('Actions/Jetstream/DeleteUser.php'));
-
-        // Blade Views...
-        copy(__DIR__.'/../../stubs/inertia/resources/views/app.blade.php', resource_path('views/app.blade.php'));
-
-        if (file_exists(resource_path('views/welcome.blade.php'))) {
-            unlink(resource_path('views/welcome.blade.php'));
-        }
-
-        // Inertia Pages...
-        copy(__DIR__.'/../../stubs/inertia/resources/js/Pages/Dashboard.vue', resource_path('js/Pages/Dashboard.vue'));
-        copy(__DIR__.'/../../stubs/inertia/resources/js/Pages/PrivacyPolicy.vue', resource_path('js/Pages/PrivacyPolicy.vue'));
-        copy(__DIR__.'/../../stubs/inertia/resources/js/Pages/TermsOfService.vue', resource_path('js/Pages/TermsOfService.vue'));
-        copy(__DIR__.'/../../stubs/inertia/resources/js/Pages/Welcome.vue', resource_path('js/Pages/Welcome.vue'));
-
-        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/inertia/resources/js/Components', resource_path('js/Components'));
-        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/inertia/resources/js/Layouts', resource_path('js/Layouts'));
-        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/inertia/resources/js/Pages/API', resource_path('js/Pages/API'));
-        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/inertia/resources/js/Pages/Auth', resource_path('js/Pages/Auth'));
-        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/inertia/resources/js/Pages/Profile', resource_path('js/Pages/Profile'));
-
-        copy(__DIR__.'/../../stubs/inertia/routes/web.php', base_path('routes/web.php'));
-
-        // Assets...
-        copy(__DIR__.'/../../stubs/resources/css/app.css', resource_path('css/app.css'));
-        copy(__DIR__.'/../../stubs/inertia/resources/js/app.js', resource_path('js/app.js'));
-
-        if (version_compare(\Illuminate\Foundation\Application::VERSION, '13.0.0', '>=')) {
-            $this->replaceInFile("import './bootstrap';", '', resource_path('js/app.js'));
-        }
-
-        // Tests...
-        $stubs = $this->getTestStubsPath();
-
-        copy($stubs.'/inertia/ApiTokenPermissionsTest.php', base_path('tests/Feature/ApiTokenPermissionsTest.php'));
-        copy($stubs.'/inertia/BrowserSessionsTest.php', base_path('tests/Feature/BrowserSessionsTest.php'));
-        copy($stubs.'/inertia/CreateApiTokenTest.php', base_path('tests/Feature/CreateApiTokenTest.php'));
-        copy($stubs.'/inertia/DeleteAccountTest.php', base_path('tests/Feature/DeleteAccountTest.php'));
-        copy($stubs.'/inertia/DeleteApiTokenTest.php', base_path('tests/Feature/DeleteApiTokenTest.php'));
-        copy($stubs.'/inertia/ProfileInformationTest.php', base_path('tests/Feature/ProfileInformationTest.php'));
-        copy($stubs.'/inertia/TwoFactorAuthenticationSettingsTest.php', base_path('tests/Feature/TwoFactorAuthenticationSettingsTest.php'));
-        copy($stubs.'/inertia/UpdatePasswordTest.php', base_path('tests/Feature/UpdatePasswordTest.php'));
-
-        // Teams...
-        if ($this->option('teams')) {
-            $this->installInertiaTeamStack();
-        }
-
-        if ($this->option('ssr')) {
-            $this->installInertiaSsrStack();
-        }
-
-        if (! $this->option('dark')) {
-            $this->removeDarkClasses((new Finder)
-                ->in(resource_path('js'))
-                ->name('*.vue')
-                ->notPath('Pages/Welcome.vue')
-            );
-        }
-
-        if (file_exists(base_path('pnpm-lock.yaml'))) {
-            $this->runCommands(['pnpm install', 'pnpm run build']);
-        } elseif (file_exists(base_path('yarn.lock'))) {
-            $this->runCommands(['yarn install', 'yarn run build']);
-        } elseif (file_exists(base_path('bun.lockb'))) {
-            $this->runCommands(['bun install', 'bun run build']);
-        } else {
-            $this->runCommands(['npm install', 'npm run build']);
-        }
-
-        $this->line('');
-        $this->runDatabaseMigrations();
-
-        $this->components->info('Inertia scaffolding installed successfully.');
-
-        return true;
-    }
-
-    /**
-     * Install the Inertia team stack into the application.
-     *
-     * @return void
-     */
-    protected function installInertiaTeamStack()
-    {
-        // Directories...
-        (new Filesystem)->ensureDirectoryExists(resource_path('js/Pages/Profile'));
-
-        // Pages...
-        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/inertia/resources/js/Pages/Teams', resource_path('js/Pages/Teams'));
-
-        // Tests...
-        $stubs = $this->getTestStubsPath();
-
-        copy($stubs.'/inertia/CreateTeamTest.php', base_path('tests/Feature/CreateTeamTest.php'));
-        copy($stubs.'/inertia/DeleteTeamTest.php', base_path('tests/Feature/DeleteTeamTest.php'));
-        copy($stubs.'/inertia/InviteTeamMemberTest.php', base_path('tests/Feature/InviteTeamMemberTest.php'));
-        copy($stubs.'/inertia/LeaveTeamTest.php', base_path('tests/Feature/LeaveTeamTest.php'));
-        copy($stubs.'/inertia/RemoveTeamMemberTest.php', base_path('tests/Feature/RemoveTeamMemberTest.php'));
-        copy($stubs.'/inertia/UpdateTeamMemberRoleTest.php', base_path('tests/Feature/UpdateTeamMemberRoleTest.php'));
-        copy($stubs.'/inertia/UpdateTeamNameTest.php', base_path('tests/Feature/UpdateTeamNameTest.php'));
-
-        $this->ensureApplicationIsTeamCompatible();
-    }
-
-    /**
-     * Ensure the installed user model is ready for team usage.
-     *
-     * @return void
-     */
-    protected function ensureApplicationIsTeamCompatible()
-    {
-        // Publish Team Migrations...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-team-migrations', '--force' => true]);
-
-        // Configuration...
-        $this->replaceInFile('// Features::teams([\'invitations\' => true])', 'Features::teams([\'invitations\' => true])', config_path('jetstream.php'));
-
-        // Directories...
-        (new Filesystem)->ensureDirectoryExists(app_path('Actions/Jetstream'));
-        (new Filesystem)->ensureDirectoryExists(app_path('Events'));
-        (new Filesystem)->ensureDirectoryExists(app_path('Policies'));
-
-        // Service Providers...
-        copy(__DIR__.'/../../stubs/app/Providers/JetstreamWithTeamsServiceProvider.php', app_path('Providers/JetstreamServiceProvider.php'));
-
-        // Models...
-        copy(__DIR__.'/../../stubs/app/Models/Membership.php', app_path('Models/Membership.php'));
-        copy(__DIR__.'/../../stubs/app/Models/Team.php', app_path('Models/Team.php'));
-        copy(__DIR__.'/../../stubs/app/Models/TeamInvitation.php', app_path('Models/TeamInvitation.php'));
-        copy(__DIR__.'/../../stubs/app/Models/UserWithTeams.php', app_path('Models/User.php'));
-
-        // Actions...
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/AddTeamMember.php', app_path('Actions/Jetstream/AddTeamMember.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/CreateTeam.php', app_path('Actions/Jetstream/CreateTeam.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/DeleteTeam.php', app_path('Actions/Jetstream/DeleteTeam.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/DeleteUserWithTeams.php', app_path('Actions/Jetstream/DeleteUser.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/InviteTeamMember.php', app_path('Actions/Jetstream/InviteTeamMember.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/RemoveTeamMember.php', app_path('Actions/Jetstream/RemoveTeamMember.php'));
-        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/UpdateTeamName.php', app_path('Actions/Jetstream/UpdateTeamName.php'));
-
-        copy(__DIR__.'/../../stubs/app/Actions/Fortify/CreateNewUserWithTeams.php', app_path('Actions/Fortify/CreateNewUser.php'));
-
-        // Policies...
-        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/app/Policies', app_path('Policies'));
-
-        // Factories...
-        copy(__DIR__.'/../../database/factories/UserFactory.php', base_path('database/factories/UserFactory.php'));
-        copy(__DIR__.'/../../database/factories/TeamFactory.php', base_path('database/factories/TeamFactory.php'));
-
-        // Seeders...
-        copy(__DIR__.'/../../database/seeders/DatabaseSeeder.php', base_path('database/seeders/DatabaseSeeder.php'));
-    }
-
-    /**
-     * Install the Inertia SSR stack into the application.
-     *
-     * @return void
-     */
-    protected function installInertiaSsrStack()
-    {
-        $this->updateNodePackages(function ($packages) {
-            return [
-                '@vue/server-renderer' => '^3.3.13',
-            ] + $packages;
-        });
-
-        copy(__DIR__.'/../../stubs/inertia/resources/js/ssr.js', resource_path('js/ssr.js'));
-        $this->replaceInFile("input: 'resources/js/app.js',", "input: 'resources/js/app.js',".PHP_EOL."            ssr: 'resources/js/ssr.js',", base_path('vite.config.js'));
-
-        (new Filesystem)->ensureDirectoryExists(app_path('Http/Middleware'));
-        copy(__DIR__.'/../../stubs/inertia/app/Http/Middleware/HandleInertiaRequests.php', app_path('Http/Middleware/HandleInertiaRequests.php'));
-
-        $this->replaceInFile('vite build', 'vite build && vite build --ssr', base_path('package.json'));
-        $this->replaceInFile('/node_modules', '/bootstrap/ssr'.PHP_EOL.'/node_modules', base_path('.gitignore'));
-    }
-
-    /**
-     * Install the given middleware names into the application.
-     *
-     * @param  array|string  $name
-     * @param  string  $group
-     * @param  string  $modifier
-     * @return void
-     */
-    protected function installMiddleware($names, $group = 'web', $modifier = 'append')
-    {
-        $bootstrapApp = file_get_contents(base_path('bootstrap/app.php'));
-
-        $names = collect(Arr::wrap($names))
-            ->filter(fn ($name) => ! Str::contains($bootstrapApp, $name))
-            ->whenNotEmpty(function ($names) use ($bootstrapApp, $group, $modifier) {
-                $names = $names->map(fn ($name) => "$name")->implode(','.PHP_EOL.'            ');
-
-                $stubs = [
-                    '->withMiddleware(function (Middleware $middleware) {',
-                    '->withMiddleware(function (Middleware $middleware): void {',
-                ];
-
-                $bootstrapApp = str_replace(
-                    $stubs,
-                    collect($stubs)->transform(fn ($stub) => $stub
-                        .PHP_EOL."        \$middleware->$group($modifier: ["
-                        .PHP_EOL."            $names,"
-                        .PHP_EOL.'        ]);'
-                        .PHP_EOL
-                    )->all(),
-                    $bootstrapApp,
-                );
-
-                file_put_contents(base_path('bootstrap/app.php'), $bootstrapApp);
-            });
     }
 
     /**
@@ -952,7 +684,6 @@ EOF;
             'stack' => fn () => select(
                 label: 'Which Jetstream stack would you like to install?',
                 options: [
-                    'inertia' => 'Vue with Inertia',
                     'livewire' => 'Livewire',
                 ]
             ),
@@ -971,17 +702,10 @@ EOF;
         collect(multiselect(
             label: 'Would you like any optional features?',
             options: collect([
-                'teams' => 'Team support',
                 'api' => 'API support',
                 'verification' => 'Email verification',
                 'dark' => 'Dark mode',
-            ])->when(
-                $input->getArgument('stack') === 'inertia',
-                fn ($options) => $options->put('ssr', 'Inertia SSR')
-            )->when(
-                $input->getArgument('stack') === 'livewire',
-                fn ($options) => $options->put('saas', 'Multi-tenant SaaS support (implies team support)')
-            )->sort()->all(),
+            ])->sort()->all(),
         ))->each(fn ($option) => $input->setOption($option, true));
 
         $input->setOption('pest', select(

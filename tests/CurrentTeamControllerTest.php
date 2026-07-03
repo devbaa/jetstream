@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tests;
 
 use App\Actions\Jetstream\CreateTeam;
@@ -8,16 +10,15 @@ use Illuminate\Support\Facades\Gate;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Tests\Fixtures\TeamPolicy;
 use Laravel\Jetstream\Tests\Fixtures\User;
-use Orchestra\Testbench\Attributes\WithConfig;
 
-#[WithConfig('jetstream.stack', 'livewire')]
-#[WithConfig('jetstream.features', ['teams'])]
 class CurrentTeamControllerTest extends OrchestraTestCase
 {
     /** {@inheritdoc} */
     #[\Override]
     protected function defineEnvironment($app)
     {
+        $this->defineHasTeamEnvironment($app);
+
         Gate::policy(Team::class, TeamPolicy::class);
         Jetstream::useUserModel(User::class);
     }

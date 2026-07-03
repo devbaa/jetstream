@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Support\Facades\Auth;
@@ -7,6 +9,9 @@ use Laravel\Fortify\Contracts\UpdatesUserProfileInformation;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
+/**
+ * @property-read \App\Models\User|null $user
+ */
 class UpdateProfileInformationForm extends Component
 {
     use WithFileUploads;
@@ -70,6 +75,8 @@ class UpdateProfileInformationForm extends Component
         $this->dispatch('saved');
 
         $this->dispatch('refresh-navigation-menu');
+
+        return null;
     }
 
     /**

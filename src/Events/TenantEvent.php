@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -13,14 +15,14 @@ abstract class TenantEvent
     /**
      * The tenant instance.
      *
-     * @var \App\Models\Tenant
+     * @var \Laravel\Jetstream\Tenant
      */
     public $tenant;
 
     /**
      * Create a new event instance.
      *
-     * @param  \App\Models\Tenant  $tenant
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @return void
      */
     public function __construct($tenant)

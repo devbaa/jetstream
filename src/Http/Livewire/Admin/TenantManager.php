@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire\Admin;
 
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +14,9 @@ use Livewire\Component;
 
 // v2: impersonation
 
+/**
+ * @property-read \App\Models\User|null $user
+ */
 class TenantManager extends Component
 {
     /**

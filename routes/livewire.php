@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Support\Facades\Route;
 use Laravel\Jetstream\Http\Controllers\CurrentCustomerAccountController;
 use Laravel\Jetstream\Http\Controllers\CurrentTeamController;
@@ -32,7 +34,7 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
         ? config('jetstream.auth_session')
         : null;
 
-    Route::group(['middleware' => array_values(array_filter([$authMiddleware, $authSessionMiddleware]))], function () {
+    Route::group(['middleware' => array_filter([$authMiddleware, $authSessionMiddleware])], function () {
         // User & Profile...
         Route::get('/user/profile', [UserProfileController::class, 'show'])->name('profile.show');
 

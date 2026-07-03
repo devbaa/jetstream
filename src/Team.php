@@ -1,15 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property int $user_id
+ * @property string $name
+ * @property bool $personal_team
+ * @property int|null $tenant_id
+ */
 abstract class Team extends Model
 {
     /**
      * Get the owner of the team.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Illuminate\Foundation\Auth\User, $this>
      */
     public function owner()
     {
@@ -29,7 +38,7 @@ abstract class Team extends Model
     /**
      * Get all of the users that belong to the team.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Illuminate\Foundation\Auth\User, $this, \Laravel\Jetstream\Membership, 'membership'>
      */
     public function users()
     {
@@ -78,7 +87,7 @@ abstract class Team extends Model
     /**
      * Get all of the pending user invitations for the team.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\TeamInvitation, $this>
      */
     public function teamInvitations()
     {

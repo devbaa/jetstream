@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Actions;
 
 use Illuminate\Support\Facades\Gate;

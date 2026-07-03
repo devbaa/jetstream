@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
@@ -56,72 +58,65 @@ class Jetstream
     /**
      * The user model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Illuminate\Foundation\Auth\User>
      */
     public static $userModel = 'App\\Models\\User';
 
     /**
      * The team model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\Team>
      */
     public static $teamModel = 'App\\Models\\Team';
 
     /**
      * The membership model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\Membership>
      */
     public static $membershipModel = 'App\\Models\\Membership';
 
     /**
      * The team invitation model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\TeamInvitation>
      */
     public static $teamInvitationModel = 'App\\Models\\TeamInvitation';
 
     /**
      * The tenant model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\Tenant>
      */
     public static $tenantModel = 'App\\Models\\Tenant';
 
     /**
      * The tenant membership model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\TenantMembership>
      */
     public static $tenantMembershipModel = 'App\\Models\\TenantMembership';
 
     /**
      * The database role model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\DatabaseRole>
      */
     public static $roleModel = 'App\\Models\\Role';
 
     /**
      * The customer account model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\CustomerAccount>
      */
     public static $customerAccountModel = 'App\\Models\\CustomerAccount';
 
     /**
      * The customer invitation model that should be used by Jetstream.
      *
-     * @var string
+     * @var class-string<\Laravel\Jetstream\CustomerInvitation>
      */
     public static $customerInvitationModel = 'App\\Models\\CustomerInvitation';
-
-    /**
-     * The Inertia manager instance.
-     *
-     * @var \Laravel\Jetstream\InertiaManager
-     */
-    public static $inertiaManager;
 
     /**
      * Determine if Jetstream has registered roles.
@@ -256,7 +251,7 @@ class Jetstream
     /**
      * Determine if a given user model utilizes the "HasTeams" trait.
      *
-     * @param  \Illuminate\Database\Eloquent\Model
+     * @param  \Illuminate\Database\Eloquent\Model  $user
      * @return bool
      */
     public static function userHasTeamFeatures($user)
@@ -289,7 +284,7 @@ class Jetstream
     /**
      * Determine if a given user model utilizes the "HasTenants" trait.
      *
-     * @param  \Illuminate\Database\Eloquent\Model
+     * @param  \Illuminate\Database\Eloquent\Model  $user
      * @return bool
      */
     public static function userHasTenantFeatures($user)
@@ -344,7 +339,7 @@ class Jetstream
     /**
      * Get the name of the user model used by the application.
      *
-     * @return string
+     * @return class-string<\Illuminate\Foundation\Auth\User>
      */
     public static function userModel()
     {
@@ -354,7 +349,7 @@ class Jetstream
     /**
      * Get a new instance of the user model.
      *
-     * @return mixed
+     * @return \Illuminate\Foundation\Auth\User
      */
     public static function newUserModel()
     {
@@ -379,7 +374,7 @@ class Jetstream
     /**
      * Get the name of the team model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\Team>
      */
     public static function teamModel()
     {
@@ -389,7 +384,7 @@ class Jetstream
     /**
      * Get a new instance of the team model.
      *
-     * @return mixed
+     * @return \Laravel\Jetstream\Team
      */
     public static function newTeamModel()
     {
@@ -414,7 +409,7 @@ class Jetstream
     /**
      * Get the name of the membership model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\Membership>
      */
     public static function membershipModel()
     {
@@ -437,7 +432,7 @@ class Jetstream
     /**
      * Get the name of the team invitation model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\TeamInvitation>
      */
     public static function teamInvitationModel()
     {
@@ -460,7 +455,7 @@ class Jetstream
     /**
      * Get the name of the tenant model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\Tenant>
      */
     public static function tenantModel()
     {
@@ -470,7 +465,7 @@ class Jetstream
     /**
      * Get a new instance of the tenant model.
      *
-     * @return mixed
+     * @return \Laravel\Jetstream\Tenant
      */
     public static function newTenantModel()
     {
@@ -495,7 +490,7 @@ class Jetstream
     /**
      * Get the name of the tenant membership model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\TenantMembership>
      */
     public static function tenantMembershipModel()
     {
@@ -518,7 +513,7 @@ class Jetstream
     /**
      * Get the name of the database role model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\DatabaseRole>
      */
     public static function roleModel()
     {
@@ -528,7 +523,7 @@ class Jetstream
     /**
      * Get a new instance of the database role model.
      *
-     * @return mixed
+     * @return \Laravel\Jetstream\DatabaseRole
      */
     public static function newRoleModel()
     {
@@ -553,7 +548,7 @@ class Jetstream
     /**
      * Get the name of the customer account model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\CustomerAccount>
      */
     public static function customerAccountModel()
     {
@@ -563,7 +558,7 @@ class Jetstream
     /**
      * Get a new instance of the customer account model.
      *
-     * @return mixed
+     * @return \Laravel\Jetstream\CustomerAccount
      */
     public static function newCustomerAccountModel()
     {
@@ -588,7 +583,7 @@ class Jetstream
     /**
      * Get the name of the customer invitation model used by the application.
      *
-     * @return string
+     * @return class-string<\Laravel\Jetstream\CustomerInvitation>
      */
     public static function customerInvitationModel()
     {
@@ -616,7 +611,7 @@ class Jetstream
      */
     public static function createTeamsUsing(string $class)
     {
-        return app()->singleton(CreatesTeams::class, $class);
+        app()->singleton(CreatesTeams::class, $class);
     }
 
     /**
@@ -627,7 +622,7 @@ class Jetstream
      */
     public static function updateTeamNamesUsing(string $class)
     {
-        return app()->singleton(UpdatesTeamNames::class, $class);
+        app()->singleton(UpdatesTeamNames::class, $class);
     }
 
     /**
@@ -638,7 +633,7 @@ class Jetstream
      */
     public static function addTeamMembersUsing(string $class)
     {
-        return app()->singleton(AddsTeamMembers::class, $class);
+        app()->singleton(AddsTeamMembers::class, $class);
     }
 
     /**
@@ -649,7 +644,7 @@ class Jetstream
      */
     public static function inviteTeamMembersUsing(string $class)
     {
-        return app()->singleton(InvitesTeamMembers::class, $class);
+        app()->singleton(InvitesTeamMembers::class, $class);
     }
 
     /**
@@ -660,7 +655,7 @@ class Jetstream
      */
     public static function removeTeamMembersUsing(string $class)
     {
-        return app()->singleton(RemovesTeamMembers::class, $class);
+        app()->singleton(RemovesTeamMembers::class, $class);
     }
 
     /**
@@ -671,7 +666,7 @@ class Jetstream
      */
     public static function deleteTeamsUsing(string $class)
     {
-        return app()->singleton(DeletesTeams::class, $class);
+        app()->singleton(DeletesTeams::class, $class);
     }
 
     /**
@@ -682,7 +677,7 @@ class Jetstream
      */
     public static function deleteUsersUsing(string $class)
     {
-        return app()->singleton(DeletesUsers::class, $class);
+        app()->singleton(DeletesUsers::class, $class);
     }
 
     /**
@@ -693,7 +688,7 @@ class Jetstream
      */
     public static function createTenantsUsing(string $class)
     {
-        return app()->singleton(CreatesTenants::class, $class);
+        app()->singleton(CreatesTenants::class, $class);
     }
 
     /**
@@ -704,7 +699,7 @@ class Jetstream
      */
     public static function updateTenantNamesUsing(string $class)
     {
-        return app()->singleton(UpdatesTenantNames::class, $class);
+        app()->singleton(UpdatesTenantNames::class, $class);
     }
 
     /**
@@ -715,7 +710,7 @@ class Jetstream
      */
     public static function addTenantStaffUsing(string $class)
     {
-        return app()->singleton(AddsTenantStaff::class, $class);
+        app()->singleton(AddsTenantStaff::class, $class);
     }
 
     /**
@@ -726,7 +721,7 @@ class Jetstream
      */
     public static function removeTenantStaffUsing(string $class)
     {
-        return app()->singleton(RemovesTenantStaff::class, $class);
+        app()->singleton(RemovesTenantStaff::class, $class);
     }
 
     /**
@@ -737,7 +732,7 @@ class Jetstream
      */
     public static function deleteTenantsUsing(string $class)
     {
-        return app()->singleton(DeletesTenants::class, $class);
+        app()->singleton(DeletesTenants::class, $class);
     }
 
     /**
@@ -748,7 +743,7 @@ class Jetstream
      */
     public static function createCustomerAccountsUsing(string $class)
     {
-        return app()->singleton(CreatesCustomerAccounts::class, $class);
+        app()->singleton(CreatesCustomerAccounts::class, $class);
     }
 
     /**
@@ -759,7 +754,7 @@ class Jetstream
      */
     public static function inviteCustomersUsing(string $class)
     {
-        return app()->singleton(InvitesCustomers::class, $class);
+        app()->singleton(InvitesCustomers::class, $class);
     }
 
     /**
@@ -770,7 +765,7 @@ class Jetstream
      */
     public static function removeCustomerAccountMembersUsing(string $class)
     {
-        return app()->singleton(RemovesCustomerAccountMembers::class, $class);
+        app()->singleton(RemovesCustomerAccountMembers::class, $class);
     }
 
     /**
@@ -781,21 +776,7 @@ class Jetstream
      */
     public static function deleteCustomerAccountsUsing(string $class)
     {
-        return app()->singleton(DeletesCustomerAccounts::class, $class);
-    }
-
-    /**
-     * Manage Jetstream's Inertia settings.
-     *
-     * @return \Laravel\Jetstream\InertiaManager
-     */
-    public static function inertia()
-    {
-        if (is_null(static::$inertiaManager)) {
-            static::$inertiaManager = new InertiaManager;
-        }
-
-        return static::$inertiaManager;
+        app()->singleton(DeletesCustomerAccounts::class, $class);
     }
 
     /**

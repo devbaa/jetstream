@@ -1,3 +1,6 @@
+includes:
+  - vendor/larastan/larastan/extension.neon
+
 parameters:
   paths:
     - config
@@ -5,7 +8,31 @@ parameters:
     - routes
     - src
 
-  level: 0
+  level: 5
 
   ignoreErrors:
     - "#Unsafe usage of new static\\(\\)#"
+
+    # The package's Blade views and markdown mail templates are published into
+    # the application by the install command; they cannot be resolved while
+    # analysing the package itself.
+    - "#expects view-string(\\|null)?, string given#"
+
+    # The user model traits are consumed by the published application stubs,
+    # which are outside the analysed paths.
+    - identifier: trait.unused
+
+    # The user model is application-defined; its Jetstream capabilities come
+    # from the published stub's traits which cannot be statically proven from
+    # the generic authenticatable contract.
+    - "#Call to an undefined method Illuminate\\\\Foundation\\\\Auth\\\\User::#"
+    - "#Access to an undefined property Illuminate\\\\Foundation\\\\Auth\\\\User::#"
+
+    # Sanctum's token model declares its attributes via casts only.
+    - "#Access to an undefined property Laravel\\\\Sanctum\\\\PersonalAccessToken::\\$abilities#"
+
+    # The package's own config directory is not recognised as the application
+    # config path during package analysis.
+    -
+        identifier: larastan.noEnvCallsOutsideOfConfig
+        path: config/jetstream.php

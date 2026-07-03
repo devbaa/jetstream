@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 class RoleRegistry
@@ -63,7 +65,7 @@ class RoleRegistry
      * Get the database roles for the given tenant, defaults first so tenant rows win.
      *
      * @param  int|string|null  $tenantId
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return \Illuminate\Database\Eloquent\Collection<int, \Laravel\Jetstream\DatabaseRole>
      */
     protected function databaseRoles($tenantId)
     {

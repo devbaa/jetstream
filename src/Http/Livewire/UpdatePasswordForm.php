@@ -1,11 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Contracts\UpdatesUserPasswords;
 use Livewire\Component;
 
+/**
+ * @property-read \App\Models\User|null $user
+ */
 class UpdatePasswordForm extends Component
 {
     /**

@@ -1,15 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property int $user_id
+ * @property string $name
+ * @property string $slug
+ * @property bool $allow_customer_registration
+ */
 abstract class Tenant extends Model
 {
     /**
      * Get the owner of the tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Illuminate\Foundation\Auth\User, $this>
      */
     public function owner()
     {
@@ -29,7 +38,7 @@ abstract class Tenant extends Model
     /**
      * Get all of the users that belong to the tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Illuminate\Foundation\Auth\User, $this, \Laravel\Jetstream\TenantMembership, 'membership'>
      */
     public function users()
     {
@@ -78,7 +87,7 @@ abstract class Tenant extends Model
     /**
      * Get all of the teams that belong to the tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\Team, $this>
      */
     public function teams()
     {
@@ -88,7 +97,7 @@ abstract class Tenant extends Model
     /**
      * Get all of the roles that are defined for the tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\DatabaseRole, $this>
      */
     public function roles()
     {
@@ -98,7 +107,7 @@ abstract class Tenant extends Model
     /**
      * Get all of the customer accounts that belong to the tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\CustomerAccount, $this>
      */
     public function customerAccounts()
     {
@@ -108,7 +117,7 @@ abstract class Tenant extends Model
     /**
      * Get all of the pending customer invitations for the tenant.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\CustomerInvitation, $this>
      */
     public function customerInvitations()
     {

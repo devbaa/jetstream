@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Events;
 
 use Illuminate\Foundation\Events\Dispatchable;
@@ -11,7 +13,7 @@ class InvitingCustomer
     /**
      * The tenant instance.
      *
-     * @var \App\Models\Tenant
+     * @var \Laravel\Jetstream\Tenant
      */
     public $tenant;
 
@@ -25,16 +27,16 @@ class InvitingCustomer
     /**
      * The customer account being invited to, if any.
      *
-     * @var \App\Models\CustomerAccount|null
+     * @var \Laravel\Jetstream\CustomerAccount|null
      */
     public $account;
 
     /**
      * Create a new event instance.
      *
-     * @param  \App\Models\Tenant  $tenant
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @param  string  $email
-     * @param  \App\Models\CustomerAccount|null  $account
+     * @param  \Laravel\Jetstream\CustomerAccount|null  $account
      * @return void
      */
     public function __construct($tenant, $email, $account = null)

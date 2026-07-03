@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
@@ -15,7 +17,7 @@ class SystemAdminSeeder extends Seeder
      */
     public function run(): void
     {
-        $email = env('JETSTREAM_ADMIN_EMAIL');
+        $email = config('jetstream.admin_email');
 
         if (! $email) {
             return;

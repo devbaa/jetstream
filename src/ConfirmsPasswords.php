@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Contracts\Auth\StatefulGuard;
@@ -41,9 +43,11 @@ trait ConfirmsPasswords
         $this->resetErrorBag();
 
         if ($this->passwordIsConfirmed()) {
-            return $this->dispatch('password-confirmed',
+            $this->dispatch('password-confirmed',
                 id: $confirmableId,
             );
+
+            return;
         }
 
         $this->confirmingPassword = true;

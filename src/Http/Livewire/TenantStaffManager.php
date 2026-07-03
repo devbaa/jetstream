@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Support\Facades\Auth;
@@ -11,6 +13,9 @@ use Laravel\Jetstream\Role;
 use Laravel\Jetstream\RoleRegistry;
 use Livewire\Component;
 
+/**
+ * @property-read \App\Models\User|null $user
+ */
 class TenantStaffManager extends Component
 {
     /**
