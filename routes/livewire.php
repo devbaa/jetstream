@@ -13,6 +13,7 @@ use Laravel\Jetstream\Http\Controllers\Livewire\AdminTenantController;
 use Laravel\Jetstream\Http\Controllers\Livewire\AdminUserController;
 use Laravel\Jetstream\Http\Controllers\Livewire\ApiTokenController;
 use Laravel\Jetstream\Http\Controllers\Livewire\CustomerRegistrationController;
+use Laravel\Jetstream\Http\Controllers\Livewire\HelpController;
 use Laravel\Jetstream\Http\Controllers\Livewire\PortalController;
 use Laravel\Jetstream\Http\Controllers\Livewire\PrivacyPolicyController;
 use Laravel\Jetstream\Http\Controllers\Livewire\TeamController;
@@ -43,6 +44,13 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
     Route::group(['middleware' => array_filter([$authMiddleware, $authSessionMiddleware, 'account.active', 'throttle:jetstream'])], function () {
         // User & Profile...
         Route::get('/user/profile', [UserProfileController::class, 'show'])->name('profile.show');
+
+        // Help Center...
+        Route::get('/help/account', [HelpController::class, 'account'])->name('help.account');
+
+        if (Jetstream::hasTenantFeatures()) {
+            Route::get('/help/tenant', [HelpController::class, 'tenant'])->name('help.tenant');
+        }
 
         Route::group(['middleware' => 'verified'], function () {
             // API...

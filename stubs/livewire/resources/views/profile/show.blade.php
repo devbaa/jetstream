@@ -7,6 +7,11 @@
 
     <div>
         <div class="max-w-7xl mx-auto py-10 sm:px-6 lg:px-8">
+            <div class="mb-6 text-sm text-gray-600 dark:text-gray-400">
+                {{ __('Need help with sign-in, recovery, privacy, or deleting your account?') }}
+                <a href="{{ route('help.account') }}" class="underline text-gray-900 dark:text-gray-100">{{ __('Visit Account Help') }}</a>.
+            </div>
+
             @if (Laravel\Fortify\Features::canUpdateProfileInformation())
                 @livewire('profile.update-profile-information-form')
 

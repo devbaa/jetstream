@@ -7,6 +7,11 @@
 
     <div>
         <div class="max-w-7xl mx-auto py-10 sm:px-6 lg:px-8">
+            <div class="mb-6 text-sm text-gray-600 dark:text-gray-400">
+                {{ __('Learn how staff, roles, teams, customers, and freezing work.') }}
+                <a href="{{ route('help.tenant') }}" class="underline text-gray-900 dark:text-gray-100">{{ __('Visit Organization Help') }}</a>.
+            </div>
+
             @livewire('tenants.update-tenant-name-form', ['tenant' => $tenant])
 
             @livewire('tenants.tenant-staff-manager', ['tenant' => $tenant])

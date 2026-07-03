@@ -2,33 +2,55 @@
 
 # Jetstream SaaS
 
-An opinionated, Livewire-only fork of [Laravel Jetstream](https://jetstream.laravel.com) that ships a complete multi-tenant SaaS architecture out of the box. It targets **Laravel 13+ / PHP 8.4+** only and does not track upstream Jetstream releases.
+An opinionated, Livewire-only fork of [Laravel Jetstream](https://jetstream.laravel.com) that ships a complete, production-shaped multi-tenant SaaS out of the box. One install command scaffolds three actors, database-backed roles, a customer portal, compliance tooling (audit log, GDPR flows, soft-delete + purge), account security (passkeys, 2FA, recovery channels), moderation (blocking & freezing), and an in-app help center — all on **Laravel 13+ / PHP 8.4+** with UUID v7 keys, `declare(strict_types=1)` everywhere, and Larastan at level max.
 
-## What you get
+This fork does **not** track upstream Jetstream releases; it is a self-contained starter.
 
-One install command scaffolds three actors on a single shared `users` table:
+---
 
-- **System owner** — `is_system_admin` flag, `system.admin` middleware, and an `/admin/tenants` screen that operates across tenants through an explicit tenant-scope bypass.
-- **Tenants** — organizations with an owner, staff memberships, database-backed roles (application defaults that each tenant may override or extend), and Jetstream teams nested beneath them via `teams.tenant_id`.
-- **Customers of tenants** — customer accounts (single user or small shared teams) with invitation emails, per-tenant self-registration, and a `/portal` context with an account switcher. The same user can be staff of one tenant and a customer of another.
+## Table of contents
 
-Single-database tenancy is enforced by a request-scoped `TenantContext`, a `BelongsToTenant` trait (global scope + automatic `tenant_id` on create) that you can drop onto your own domain models, and context middleware that self-heals stale state. Escape hatches are explicit: `TenantContext::bypass()`, `TenantContext::runFor()` for queued jobs, and a `withoutTenancy()` query scope.
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [The three actors](#the-three-actors)
+- [Tenancy & scoping](#tenancy--scoping)
+- [Roles & permissions](#roles--permissions)
+- [Customer portal](#customer-portal)
+- [Account security](#account-security)
+  - [Passwords & two-factor authentication](#passwords--two-factor-authentication)
+  - [Passkeys](#passkeys)
+  - [Account recovery — recovery email & phone](#account-recovery--recovery-email--phone)
+- [Blocking & freezing](#blocking--freezing)
+- [Compliance & operations](#compliance--operations)
+  - [Universal audit log](#universal-audit-log)
+  - [Soft deletes & the purge command](#soft-deletes--the-purge-command)
+  - [Data rights (GDPR / CCPA / KVKK)](#data-rights-gdpr--ccpa--kvkk)
+  - [Throttling with bypass](#throttling-with-bypass)
+- [Names](#names)
+- [UUID v7 primary keys](#uuid-v7-primary-keys)
+- [Registration honeypot](#registration-honeypot)
+- [In-app help center](#in-app-help-center)
+- [Configuration reference](#configuration-reference)
+- [Extension points](#extension-points)
+- [Database schema](#database-schema)
+- [Testing & quality gates](#testing--quality-gates)
+- [Upgrade notes](#upgrade-notes)
+- [License](#license)
 
-Passkey authentication (Laravel Fortify) is wired into the UI: profile passkey management and a "Sign in with a passkey" login flow via the [`@laravel/passkeys`](https://www.npmjs.com/package/@laravel/passkeys) browser client.
+---
 
-## Compliance & operations
+## Requirements
 
-- **Universal audit log** — drop the `Laravel\Jetstream\Audit\Auditable` trait onto *any* Eloquent model to record a full change log (created / updated / deleted / restored / force deleted) with the acting user, tenant, IP address, and user agent. Hidden attributes are never recorded. Authentication activity (logins, logouts, failed attempts, password resets, registrations) is logged automatically. An `audit-log-viewer` Livewire component powers a per-tenant change log on the tenant settings screen and an application-wide `/admin/audit` screen for system administrators.
-- **Soft deletes + purge command** — deleting a user, tenant, team, or customer account only soft deletes it. `php artisan jetstream:purge` permanently erases records past the configured retention (`jetstream.purge.retention_days`, default 30), processes due data deletion requests, and prunes expired audit logs. Schedule it daily: `Schedule::command('jetstream:purge')->daily()`. Purging a user erases everything they own, scrubs their audit trail, and anonymizes log entries they authored.
-- **Data rights (GDPR / CCPA / KVKK)** — a "Data & Privacy" profile section lets users download their personal data as JSON and file an account deletion request with a cancellable grace period (`jetstream.privacy.grace_period_days`, default 30). Requests are tracked in a `data_requests` table with IP/user-agent provenance and dispatch `DataRequestCreated` / `DataRequestCompleted` / `DataRequestCancelled` events.
-- **Throttling with bypass** — all Jetstream routes run behind named rate limiters (`jetstream` per user, `jetstream-guest` per IP) configured via `jetstream.throttle`. System administrators, IPs in `throttle.bypass_ips`, and requests approved by a `Jetstream::bypassThrottlingUsing(fn ($request) => ...)` callback are never throttled.
-- **Account recovery** — users may store a country-coded phone number and a secondary recovery email. The recovery email is verified through a signed link, after which the guest `/account-recovery` flow can send password reset links to it — useful when the primary inbox is lost. Phone numbers are entered with a country selector and normalized to E.164. Phone verification runs through a pluggable service: register one with `Jetstream::verifyPhonesUsing(YourSmsSender::class)` and users get a code-based verification flow; without one, numbers can be stored but the UI explains that verification is not active.
-- **Blocking & freezing** — enforcement at both levels:
-  - *System-wide*: administrators block users (with an optional reason) from the `/admin/users` screen; blocked users are logged out everywhere and cannot use the application until unblocked. The same screen lets admins reset a user's two-factor authentication or delete their passkeys to restore access after a lost device.
-  - *Tenant-based*: system admins freeze entire tenants (staff and customers lose access, `TenantFrozen`/`TenantUnfrozen` events fire); tenant staff with `staff:manage` freeze individual staff memberships (the member stays on the tenant but loses all access and permissions); staff with account access freeze individual customer accounts out of the portal. All freezes are reversible toggles.
-- **Names** — `name` stays the general-purpose display name; optional `middle_name` and `last_name` columns and a `fullName()` method compose the complete legal name where you need it.
-- **UUID v7 primary keys** — every entity (users, tenants, teams, roles, customer accounts, invitations, audit logs, data requests) uses time-ordered UUID v7 keys instead of auto-incrementing integers, so IDs cannot be enumerated or guessed (`/tenants/2`, `/user/123`-style probing yields nothing) while remaining index-friendly. If you enable the API feature, publish Sanctum's migration and switch `personal_access_tokens` to `$table->uuidMorphs('tokenable')` so token ownership matches the UUID user keys.
-- **Registration honeypot** — both the sign-up form and the customer portal self-registration form carry an invisible `website` field that humans never see and bots reliably fill; submissions with a value are rejected at validation. Combined with the per-IP guest rate limiter, this stops the bulk of automated sign-ups without CAPTCHAs.
+| Dependency | Version |
+| --- | --- |
+| PHP | ^8.4 |
+| Laravel | ^13.0 |
+| Livewire | ^3.6 |
+| Fortify | ^1.37 (passkeys) |
+| Stack | Livewire only (Inertia is not supported) |
+
+---
 
 ## Installation
 
@@ -36,20 +58,422 @@ Passkey authentication (Laravel Fortify) is wired into the UI: profile passkey m
 laravel new my-saas
 cd my-saas
 
+# Point Composer at this fork and require it.
 composer config repositories.jetstream vcs https://github.com/devbaa/jetstream
 composer require laravel/jetstream:"dev-<branch> as 6.0"
 
+# Scaffold everything (Livewire is the only supported stack).
 php artisan jetstream:install livewire
+
+# Run migrations and seed default roles + the system administrator.
 php artisan migrate --seed
 ```
 
-Set `JETSTREAM_ADMIN_EMAIL` in your `.env` to flag your own user as the system administrator, then re-run `php artisan db:seed --class=SystemAdminSeeder` after registering.
+Flag your own user as the system administrator by setting `JETSTREAM_ADMIN_EMAIL` in `.env`, then (after registering that user) run:
 
-## Quality gates
+```bash
+php artisan db:seed --class=SystemAdminSeeder
+```
+
+Schedule the purge command so soft-deleted records and due deletion requests are processed automatically (in `routes/console.php` or your scheduler):
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('jetstream:purge')->daily();
+```
+
+### Install flags
+
+`php artisan jetstream:install livewire` accepts:
+
+| Flag | Effect |
+| --- | --- |
+| `--api` | Enables Sanctum API token management. |
+| `--verification` | Enables email verification. |
+| `--pest` | Generates Pest tests instead of PHPUnit. |
+| `--dark` | Keeps the dark-mode Tailwind classes. |
+
+The SaaS architecture (tenants, roles, customer portal, compliance, security) is always installed — there is a single install path.
+
+---
+
+## Architecture at a glance
+
+```
+System owner (is_system_admin)
+│   /admin/tenants · /admin/users · /admin/audit
+│
+├── Tenant (organization)                       ← paying customer of the SaaS
+│   ├── Owner (protected role)
+│   ├── Staff (tenant_user, DB-backed roles, freezable)
+│   ├── Teams (Jetstream teams, nested via teams.tenant_id)
+│   └── Customer accounts (freezable)
+│       └── Members (customer_account_user)
+│
+└── Users table (single, shared)
+    A person can be staff of tenant A AND a customer of tenant B at once.
+```
+
+Everything lives in **one database** with `tenant_id` scoping. Two persistent context columns on `users` — `current_tenant_id` (staff context) and `current_customer_account_id` (customer context) — mirror Jetstream's `current_team_id`. The active context is chosen by URL space: app routes run `tenant.context`; `/portal/*` runs `customer.context`.
+
+---
+
+## The three actors
+
+| Actor | What they are | Entry points |
+| --- | --- | --- |
+| **System owner** | The SaaS operator. `users.is_system_admin`. | `system.admin` middleware, `/admin/tenants`, `/admin/users`, `/admin/audit`. |
+| **Tenant** | An organization with an owner, staff, roles, and sub-teams. | Tenant switcher in nav, `/tenants/{tenant}` settings. |
+| **Customer** | Mostly a single user, sometimes a small shared account, belonging to a tenant. | `/portal` with an account switcher. |
+
+Because there is one `users` table, "being a customer" is a *relationship*, not an identity — the same person can own tenant A, work as staff for tenant B, and be a customer of tenant C simultaneously.
+
+---
+
+## Tenancy & scoping
+
+Single-database tenancy is enforced by a small, explicit toolkit:
+
+- **`TenantContext`** — a request-scoped (Octane/queue-safe) singleton holding the active tenant. Resolved by the `tenant.context` middleware, which self-heals stale state (revoked access, cross-tenant `current_team_id`).
+- **`BelongsToTenant`** — a trait for your own domain models. It adds a global scope (only rows for the current tenant) and auto-fills `tenant_id` on create. This is the main reusability payoff — drop it on any model:
+
+  ```php
+  use Laravel\Jetstream\Tenancy\BelongsToTenant;
+
+  class Invoice extends Model
+  {
+      use BelongsToTenant;
+  }
+  ```
+
+- **Explicit escape hatches** — nothing is magic:
+
+  ```php
+  // Run a closure with the tenant scope disabled (admin screens).
+  app(TenantContext::class)->bypass(fn () => Tenant::all());
+
+  // Run a queued job in a known tenant's context.
+  app(TenantContext::class)->runFor($tenant, fn () => /* ... */);
+
+  // One-off unscoped query.
+  Invoice::withoutTenancy()->get();
+  ```
+
+> **Queued jobs run with an empty context** (the scope no-ops). Always wrap tenant-specific job work in `TenantContext::runFor($tenant, …)`.
+
+Teams are deliberately **not** globally scoped (that would break personal teams and `currentTeam()`); team access stays relation- and policy-constrained.
+
+---
+
+## Roles & permissions
+
+Roles are **database-backed** in Jetstream's `{key, name, permissions[]}` shape:
+
+- The `roles` table holds application defaults where `tenant_id IS NULL` (seeded from your code catalog by `DefaultRolesSeeder`). A tenant may **override** a default key or **add** custom roles; resolution is `tenant row → default row → static Jetstream::$roles` via a request-memoized `RoleRegistry`.
+- Tenant owners manage roles through a Livewire `RoleManager` on the organization settings screen: create custom roles, edit defaults (which transparently creates a per-tenant copy), tick permissions.
+- The `owner` key is **reserved** and always has full access (a synthetic `OwnerRole`). A role that is still assigned to staff cannot be deleted.
+
+The default catalog (customizable in your published `App\Providers\JetstreamServiceProvider`):
+
+```php
+Jetstream::permissions([
+    'create', 'read', 'update', 'delete',
+    'tenant:update', 'staff:manage', 'roles:manage', 'customers:manage',
+]);
+
+Jetstream::role('admin', 'Administrator', [/* all */]);
+Jetstream::role('staff', 'Staff', ['create', 'read', 'update']);
+```
+
+Permission checks:
+
+```php
+$user->hasTenantPermission($tenant, 'staff:manage');   // owner ⇒ always true
+$user->tenantRole($tenant);                            // Role value object or OwnerRole
+```
+
+Frozen tenants and frozen memberships deny **every** permission (see [Blocking & freezing](#blocking--freezing)).
+
+---
+
+## Customer portal
+
+When the `portal` option is enabled, tenants get a full customer side:
+
+- **Customer accounts** (`customer_accounts`): a single user or a small shared group. No "type" column — a solo account is simply one with no extra members.
+- **Invitations**: staff invite customers by email (signed accept links); members are invited into an existing account. A `NULL` `customer_account_id` on an invitation means "new customer" — accepting creates an account owned by the acceptor.
+- **Self-registration**: when `customer-registration` is enabled *and* the tenant toggles it on, guests can self-register at `/portal/register/{tenant:slug}` (throttled, honeypot-protected).
+- **The portal** (`/portal`): an account switcher, member management, and account settings. The `customer.context` middleware auto-selects the only account, validates membership, and derives the tenant context from the account.
+
+---
+
+## Account security
+
+Everything below is managed from the user's **profile page**, and documented for end users in the [in-app help center](#in-app-help-center).
+
+### Passwords & two-factor authentication
+
+Standard Fortify password update and reset. Two-factor authentication uses an authenticator app; enabling it issues **eight single-use recovery codes** (shown after password confirmation, regenerable). The 2FA challenge accepts a recovery code in place of a TOTP code.
+
+**Recovery ladder if the second factor is lost:**
+1. Use a saved recovery code at the challenge.
+2. Lost the codes too? Sign in with a **passkey**.
+3. Lost everything? A system administrator resets 2FA (and/or clears passkeys) from `/admin/users`.
+
+### Passkeys
+
+Passkeys (WebAuthn, via Fortify 1.37 + the [`@laravel/passkeys`](https://www.npmjs.com/package/@laravel/passkeys) browser client, exposed as `window.Passkeys`) are wired into the UI for registered users:
+
+- A `PasskeyManager` profile section: register a named passkey, see its authenticator label and last-used time, delete it (password-confirmed, ownership-checked).
+- A **"Sign in with a passkey"** login flow with native browser autofill (`autocomplete="username webauthn"`).
+- **Reset**: users can delete/re-register their own passkeys anytime; admins can clear a user's passkeys from `/admin/users` if every device is lost.
+
+### Account recovery — recovery email & phone
+
+Two recovery channels, on top of the standard password reset:
+
+**Secondary (recovery) email**
+- Entered on the profile (must differ from the primary email). We send a signed verification link; **only verified recovery emails are usable**.
+- If locked out of the primary inbox, the guest `/account-recovery` page (enumeration-safe, throttled) emails a password reset link to the verified recovery address.
+
+**Phone number**
+- Entered with a **country selector** (full dial-code catalog in `Laravel\Jetstream\PhoneCountry`) and normalized to **E.164**.
+- Verification is pluggable. Register an SMS sender to enable a hashed, expiring 6-digit code flow:
+
+  ```php
+  // In a service provider:
+  Jetstream::verifyPhonesUsing(App\Sms\TwilioPhoneVerifier::class);
+  ```
+
+  ```php
+  // Your sender implements the contract:
+  use Laravel\Jetstream\Contracts\SendsPhoneVerifications;
+
+  class TwilioPhoneVerifier implements SendsPhoneVerifications
+  {
+      public function send(\App\Models\User $user, string $code): void
+      {
+          // ... send $code to $user->phone via your provider
+      }
+  }
+  ```
+
+- With **no** sender registered, users can still store a number (marked unverified) and the UI states that "phone verification is not active right now." SMS delivery is intentionally left to your provider of choice.
+
+---
+
+## Blocking & freezing
+
+Two independent moderation levers:
+
+| | **Block** | **Freeze** |
+| --- | --- | --- |
+| Scope | The whole application, every organization. | One organization, membership, or customer account. |
+| Who | System administrators (`/admin/users`). | Admins (tenant), tenant staff (membership / customer account). |
+| Effect | User is signed out everywhere and cannot sign in. | Target loses access & permissions where frozen. |
+| Reversible | Yes (unblock). | Yes (unfreeze) — nothing is lost. |
+| Storage | `users.blocked_at` / `blocked_reason`. | `tenants.frozen_at`, `tenant_user.frozen_at`, `customer_accounts.frozen_at`. |
+
+- **Blocking** is enforced by the `account.active` middleware on every authenticated request; it logs the user out and redirects with a clear message. `/admin/users` also lets admins reset lost 2FA and clear lost passkeys.
+- **Freezing** has three granularities: a whole **tenant** (system admin — all staff and customers lose access; `TenantFrozen`/`TenantUnfrozen` events), a **staff membership** (tenant staff with `staff:manage` — the member keeps their seat but loses all access; owners cannot be frozen), and a **customer account** (tenant staff — its members are locked out of the portal). Context middleware self-heals frozen selections, and `switchTenant`/`switchCustomerAccount` refuse frozen targets.
+
+---
+
+## Compliance & operations
+
+### Universal audit log
+
+Drop `Laravel\Jetstream\Audit\Auditable` onto **any** Eloquent model to record a full change log:
+
+```php
+use Laravel\Jetstream\Audit\Auditable;
+
+class Invoice extends Model
+{
+    use Auditable;
+
+    // Optional: exclude extra attributes from the log.
+    public function auditExcludedAttributes(): array
+    {
+        return ['internal_notes'];
+    }
+}
+```
+
+Every `created` / `updated` / `deleted` / `restored` / `force_deleted` event writes an `audit_logs` row with the acting user, tenant, **IP address**, **user agent**, and old/new values. Hidden attributes (passwords, tokens, 2FA secrets) are never recorded. Authentication activity — logins, logouts, failed attempts (email only, never the password), password resets, registrations — is logged automatically.
+
+Viewers: a per-tenant change log on the organization settings screen, and an application-wide `/admin/audit` for system administrators. Toggle logging and set retention via `jetstream.audit`.
+
+### Soft deletes & the purge command
+
+Users, tenants, teams, and customer accounts are **soft-deleted** by the delete actions (which release `current_*` pointers). Permanent erasure is deferred to `jetstream:purge`:
+
+```bash
+php artisan jetstream:purge            # honors jetstream.purge.retention_days (default 30)
+php artisan jetstream:purge --days=7   # override retention
+php artisan jetstream:purge --force    # run in production without prompt
+```
+
+It (1) processes due data deletion requests, (2) permanently erases records trashed past retention — for a user, that means everything they own, plus tokens, passkeys, sessions, audit entries about them, and anonymization of entries they authored — and (3) prunes audit logs past `jetstream.audit.retention_days`.
+
+### Data rights (GDPR / CCPA / KVKK)
+
+A **"Data & Privacy"** profile section lets users:
+
+- **Export** their personal data as JSON (profile, teams, organizations, customer accounts, recent activity).
+- **Request account deletion** (password-confirmed, optional reason) with a **cancellable grace period** (`jetstream.privacy.grace_period_days`, default 30). Requests are tracked in `data_requests` with IP/user-agent provenance and dispatch `DataRequestCreated` / `DataRequestCompleted` / `DataRequestCancelled` events. When the grace period elapses, `jetstream:purge` soft-deletes the account, and permanent erasure follows the purge retention window.
+
+### Throttling with bypass
+
+All package routes run behind named limiters: `jetstream` (per user, default 60/min) and `jetstream-guest` (per IP, default 6/min), configured via `jetstream.throttle`. Requests are **never** throttled when:
+
+- the user is a system administrator,
+- the IP is in `jetstream.throttle.bypass_ips`, or
+- a `Jetstream::bypassThrottlingUsing(fn ($request) => bool)` callback approves it:
+
+  ```php
+  Jetstream::bypassThrottlingUsing(fn ($request) => $request->hasHeader('X-Internal-Job'));
+  ```
+
+---
+
+## Names
+
+`name` stays the general-purpose display name. Optional `middle_name` and `last_name` columns are added, plus a composer:
+
+```php
+$user->fullName(); // "Taylor James Otwell", skipping any blank parts
+```
+
+Both extra fields are editable on the profile form.
+
+---
+
+## UUID v7 primary keys
+
+Every entity — users, tenants, teams, roles, customer accounts, team/customer invitations, audit logs, data requests — uses **time-ordered UUID v7** primary keys (Laravel's `HasUuids`) instead of auto-incrementing integers. IDs cannot be enumerated or guessed (`/tenants/2`, `/user/123`-style probing yields nothing) while staying index-friendly. Pivot rows keep an internal auto-increment id (never exposed).
+
+> **If you enable the API feature:** publish Sanctum's migration and switch `personal_access_tokens` to `$table->uuidMorphs('tokenable')` so token ownership matches the UUID user keys.
+
+---
+
+## Registration honeypot
+
+Both the sign-up form and the customer portal self-registration form carry a visually hidden `website` field (bots fill it, humans never see it). Submissions carrying a value are rejected by the `prohibited` validation rule in `CreateNewUser` and the portal registration controller. Combined with the per-IP guest rate limiter, this blocks the bulk of automated sign-ups without CAPTCHAs.
+
+---
+
+## In-app help center
+
+Two end-user help pages are scaffolded and linked from the UI (no CAPTCHA, no external docs needed):
+
+- **Account Help** (`/help/account`, linked from the profile page and the account menu) — plain-language, step-by-step guidance for signing in, two-factor authentication, passkeys, recovery email & phone, email verification, your data & privacy (GDPR export), and the account-deletion steps.
+- **Organization Help** (`/help/tenant`, linked from organization settings) — how organizations, staff, roles, sub-teams, and customers work, plus freezing staff/customer accounts. Administrators additionally see sections on freezing whole organizations, blocking users, and the audit log.
+
+Both are published as editable Blade views (`resources/views/help/*.blade.php`) using a reusable `<x-help-topic>` component — tailor the copy to your product.
+
+---
+
+## Configuration reference
+
+`config/jetstream.php` (published to your app):
+
+```php
+'features' => [
+    // Features::termsAndPrivacyPolicy(),
+    // Features::profilePhotos(),
+    // Features::api(),
+    // Features::teams(['invitations' => true]),
+    // Features::tenants(['portal' => true, 'customer-registration' => true]),
+    Features::accountDeletion(),
+    Features::dataPrivacy(),      // Data & Privacy profile section
+    Features::accountRecovery(),  // recovery email + phone
+],
+
+'tenants' => [
+    'self_service_creation' => true,   // any user may create a tenant, vs. admin-only
+],
+
+'audit' => [
+    'enabled' => true,
+    'retention_days' => null,          // null = keep forever; N = pruned by jetstream:purge
+],
+
+'purge' => [
+    'retention_days' => 30,            // soft-deleted records erased after N days
+],
+
+'privacy' => [
+    'grace_period_days' => 30,         // cancellable window before a deletion request runs
+],
+
+'throttle' => [
+    'attempts' => 60,                  // per-user, per-minute
+    'guest_attempts' => 6,             // per-IP, per-minute
+    'bypass_ips' => [],
+],
+
+'admin_email' => env('JETSTREAM_ADMIN_EMAIL'),
+```
+
+---
+
+## Extension points
+
+Every model and action is swappable, and all swap points are typed (`class-string<…>`):
+
+```php
+Jetstream::useTenantModel(App\Models\Tenant::class);
+Jetstream::useCustomerAccountModel(App\Models\CustomerAccount::class);
+Jetstream::useRoleModel(App\Models\Role::class);
+Jetstream::useAuditLogModel(App\Models\AuditLog::class);
+Jetstream::useDataRequestModel(App\Models\DataRequest::class);
+
+Jetstream::createTenantsUsing(App\Actions\Jetstream\CreateTenant::class);
+Jetstream::inviteCustomersUsing(App\Actions\Jetstream\InviteCustomer::class);
+// ... full create/update/add/remove/delete registrars for tenants & customers
+
+Jetstream::verifyPhonesUsing(App\Sms\YourPhoneVerifier::class);
+Jetstream::bypassThrottlingUsing(fn ($request) => /* bool */);
+```
+
+Business actions are published into `app/Actions/Jetstream/` (edit them freely); package plumbing lives in `src/`.
+
+---
+
+## Database schema
+
+Key tables (all UUID v7 keys, all foreign keys indexed):
+
+| Table | Notable columns |
+| --- | --- |
+| `users` | `name`, `middle_name`, `last_name`, `email`, `phone` + `phone_country` + `phone_verified_at`, `recovery_email` (+ verified), `current_team_id`/`current_tenant_id`/`current_customer_account_id`, `is_system_admin`, `blocked_at`/`blocked_reason`, soft deletes |
+| `tenants` | `user_id` (owner), `slug` (unique), `allow_customer_registration`, `frozen_at`, soft deletes |
+| `tenant_user` | `role`, `frozen_at`, unique `(tenant_id, user_id)` |
+| `roles` | `tenant_id` (nullable = default), `key`, `permissions` (json), unique `(tenant_id, key)` |
+| `customer_accounts` | `tenant_id`, `user_id` (owner), `frozen_at`, soft deletes |
+| `customer_invitations` | `tenant_id`, `customer_account_id` (nullable), `email` |
+| `audit_logs` | `tenant_id`, `user_id`, `event`, `auditable` (uuid morph), `old_values`/`new_values`, `ip_address`, `user_agent` |
+| `data_requests` | `user_id`, `type`, `status`, `process_after`, provenance columns |
+
+Migrations are published under the `jetstream-tenant-migrations` and `jetstream-compliance-migrations` tags.
+
+---
+
+## Testing & quality gates
 
 - `declare(strict_types=1)` across the entire codebase.
-- [Larastan](https://github.com/larastan/larastan) at **level max** with typed model swap points (`class-string<...>` contracts) — run `vendor/bin/phpstan analyse`.
-- Full package test suite on Orchestra Testbench — run `vendor/bin/phpunit`.
+- **[Larastan](https://github.com/larastan/larastan) at level max** with zero errors and no baseline — `vendor/bin/phpstan analyse`.
+- Full package test suite on Orchestra Testbench — `vendor/bin/phpunit`.
+
+---
+
+## Upgrade notes
+
+This fork intentionally diverges from upstream Jetstream (Inertia removed, single install path, UUID keys, Laravel 13/PHP 8.4 floor) and does not track upstream releases. Treat it as a standalone starter.
+
+---
 
 ## License
 
