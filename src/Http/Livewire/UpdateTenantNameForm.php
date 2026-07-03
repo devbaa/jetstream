@@ -4,40 +4,40 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Contracts\UpdatesTenantNames;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class UpdateTenantNameForm extends Component
 {
     /**
      * The tenant instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Tenant
      */
     public $tenant;
 
     /**
      * The component's state.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     public $state = [];
 
     /**
      * Mount the component.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @return void
      */
     public function mount($tenant)
     {
         $this->tenant = $tenant;
 
-        $this->state = $tenant->withoutRelations()->toArray();
+        $this->state = array_filter($tenant->withoutRelations()->toArray(), 'is_string', ARRAY_FILTER_USE_KEY);
     }
 
     /**
@@ -64,7 +64,7 @@ class UpdateTenantNameForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

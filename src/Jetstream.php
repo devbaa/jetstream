@@ -37,21 +37,21 @@ class Jetstream
     /**
      * The roles that are available to assign to users.
      *
-     * @var array
+     * @var array<string, \Laravel\Jetstream\Role>
      */
     public static $roles = [];
 
     /**
      * The permissions that exist within the application.
      *
-     * @var array
+     * @var list<string>
      */
     public static $permissions = [];
 
     /**
      * The default permissions that should be available to new entities.
      *
-     * @var array
+     * @var list<string>
      */
     public static $defaultPermissions = [];
 
@@ -136,7 +136,7 @@ class Jetstream
      * to the statically registered roles.
      *
      * @param  string  $key
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return \Laravel\Jetstream\Role|null
      */
     public static function findRole(string $key, $tenant = null)
@@ -155,16 +155,15 @@ class Jetstream
      *
      * @param  string  $key
      * @param  string  $name
-     * @param  array  $permissions
+     * @param  list<string>  $permissions
      * @return \Laravel\Jetstream\Role
      */
     public static function role(string $key, string $name, array $permissions)
     {
-        static::$permissions = collect(array_merge(static::$permissions, $permissions))
+        static::$permissions = array_values(collect(array_merge(static::$permissions, $permissions))
                                     ->unique()
                                     ->sort()
-                                    ->values()
-                                    ->all();
+                                    ->all());
 
         return tap(new Role($key, $name, $permissions), function ($role) use ($key) {
             static::$roles[$key] = $role;
@@ -184,7 +183,7 @@ class Jetstream
     /**
      * Define the available API token permissions.
      *
-     * @param  array  $permissions
+     * @param  list<string>  $permissions
      * @return static
      */
     public static function permissions(array $permissions)
@@ -197,7 +196,7 @@ class Jetstream
     /**
      * Define the default permissions that should be available to new API tokens.
      *
-     * @param  array  $permissions
+     * @param  list<string>  $permissions
      * @return static
      */
     public static function defaultApiTokenPermissions(array $permissions)
@@ -210,8 +209,8 @@ class Jetstream
     /**
      * Return the permissions in the given list that are actually defined permissions for the application.
      *
-     * @param  array  $permissions
-     * @return array
+     * @param  array<int, string>  $permissions
+     * @return list<string>
      */
     public static function validPermissions(array $permissions)
     {
@@ -315,25 +314,59 @@ class Jetstream
     }
 
     /**
+     * Get the application's post-authentication home path.
+     */
+    public static function homePath(): string
+    {
+        $home = config('fortify.home');
+
+        return is_string($home) ? $home : '/dashboard';
+    }
+
+    /**
+     * Get the currently authenticated user or abort the request.
+     *
+     * @return \App\Models\User
+     */
+    public static function currentUser()
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof \App\Models\User) {
+            abort(401);
+        }
+
+        return $user;
+    }
+
+    /**
      * Find a user instance by the given ID.
      *
      * @param  int  $id
-     * @return mixed
+     * @return \App\Models\User
      */
     public static function findUserByIdOrFail($id)
     {
-        return static::newUserModel()->where('id', $id)->firstOrFail();
+        $user = static::newUserModel()->newQuery()->where('id', $id)->firstOrFail();
+
+        abort_unless($user instanceof \App\Models\User, 500);
+
+        return $user;
     }
 
     /**
      * Find a user instance by the given email address or fail.
      *
      * @param  string  $email
-     * @return mixed
+     * @return \App\Models\User
      */
     public static function findUserByEmailOrFail(string $email)
     {
-        return static::newUserModel()->where('email', $email)->firstOrFail();
+        $user = static::newUserModel()->newQuery()->where('email', $email)->firstOrFail();
+
+        abort_unless($user instanceof \App\Models\User, 500);
+
+        return $user;
     }
 
     /**
@@ -361,7 +394,7 @@ class Jetstream
     /**
      * Specify the user model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Illuminate\Foundation\Auth\User>  $model
      * @return static
      */
     public static function useUserModel(string $model)
@@ -396,7 +429,7 @@ class Jetstream
     /**
      * Specify the team model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\Team>  $model
      * @return static
      */
     public static function useTeamModel(string $model)
@@ -419,7 +452,7 @@ class Jetstream
     /**
      * Specify the membership model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\Membership>  $model
      * @return static
      */
     public static function useMembershipModel(string $model)
@@ -442,7 +475,7 @@ class Jetstream
     /**
      * Specify the team invitation model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\TeamInvitation>  $model
      * @return static
      */
     public static function useTeamInvitationModel(string $model)
@@ -477,7 +510,7 @@ class Jetstream
     /**
      * Specify the tenant model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\Tenant>  $model
      * @return static
      */
     public static function useTenantModel(string $model)
@@ -500,7 +533,7 @@ class Jetstream
     /**
      * Specify the tenant membership model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\TenantMembership>  $model
      * @return static
      */
     public static function useTenantMembershipModel(string $model)
@@ -535,7 +568,7 @@ class Jetstream
     /**
      * Specify the database role model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\DatabaseRole>  $model
      * @return static
      */
     public static function useRoleModel(string $model)
@@ -570,7 +603,7 @@ class Jetstream
     /**
      * Specify the customer account model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\CustomerAccount>  $model
      * @return static
      */
     public static function useCustomerAccountModel(string $model)
@@ -593,7 +626,7 @@ class Jetstream
     /**
      * Specify the customer invitation model that should be used by Jetstream.
      *
-     * @param  string  $model
+     * @param  class-string<\Laravel\Jetstream\CustomerInvitation>  $model
      * @return static
      */
     public static function useCustomerInvitationModel(string $model)

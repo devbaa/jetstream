@@ -43,7 +43,9 @@ class CustomerContext
      */
     public function currentId()
     {
-        return $this->account?->getKey();
+        $key = $this->account?->getKey();
+
+        return is_int($key) || is_string($key) ? $key : null;
     }
 
     /**

@@ -28,11 +28,11 @@ abstract class Tenant extends Model
     /**
      * Get all of the tenant's users including its owner.
      *
-     * @return \Illuminate\Support\Collection
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Foundation\Auth\User>
      */
     public function allUsers()
     {
-        return $this->users->merge([$this->owner]);
+        return $this->users->merge(array_filter([$this->owner]));
     }
 
     /**

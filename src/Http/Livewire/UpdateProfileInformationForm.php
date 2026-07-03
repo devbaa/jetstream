@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Fortify\Contracts\UpdatesUserProfileInformation;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class UpdateProfileInformationForm extends Component
 {
@@ -19,7 +19,7 @@ class UpdateProfileInformationForm extends Component
     /**
      * The component's state.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     public $state = [];
 
@@ -44,11 +44,11 @@ class UpdateProfileInformationForm extends Component
      */
     public function mount()
     {
-        $user = Auth::user();
+        $user = Jetstream::currentUser();
 
         $this->state = array_merge([
             'email' => $user->email,
-        ], $user->withoutRelations()->toArray());
+        ], array_filter($user->withoutRelations()->toArray(), 'is_string', ARRAY_FILTER_USE_KEY));
     }
 
     /**
@@ -62,7 +62,7 @@ class UpdateProfileInformationForm extends Component
         $this->resetErrorBag();
 
         $updater->update(
-            Auth::user(),
+            Jetstream::currentUser(),
             $this->photo
                 ? array_merge($this->state, ['photo' => $this->photo])
                 : $this->state
@@ -86,7 +86,7 @@ class UpdateProfileInformationForm extends Component
      */
     public function deleteProfilePhoto()
     {
-        Auth::user()->deleteProfilePhoto();
+        Jetstream::currentUser()->deleteProfilePhoto();
 
         $this->dispatch('refresh-navigation-menu');
     }
@@ -98,7 +98,7 @@ class UpdateProfileInformationForm extends Component
      */
     public function sendEmailVerification()
     {
-        Auth::user()->sendEmailVerificationNotification();
+        Jetstream::currentUser()->sendEmailVerificationNotification();
 
         $this->verificationLinkSent = true;
     }
@@ -110,7 +110,7 @@ class UpdateProfileInformationForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

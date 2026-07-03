@@ -18,12 +18,12 @@ class CurrentTenantController extends Controller
      */
     public function update(Request $request)
     {
-        $tenant = Jetstream::newTenantModel()->findOrFail($request->tenant_id);
+        $tenant = Jetstream::newTenantModel()->newQuery()->findOrFail($request->integer('tenant_id'));
 
-        if (! $request->user()->switchTenant($tenant)) {
+        if (! Jetstream::currentUser()->switchTenant($tenant)) {
             abort(403);
         }
 
-        return redirect(config('fortify.home'), 303);
+        return redirect(Jetstream::homePath(), 303);
     }
 }

@@ -16,10 +16,10 @@ class UpdateRole
      *
      * The role's key is immutable so existing membership assignments never dangle.
      *
-     * @param  mixed  $user
-     * @param  mixed  $tenant
-     * @param  mixed  $role
-     * @param  array  $input
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Tenant  $tenant
+     * @param  \Laravel\Jetstream\DatabaseRole  $role
+     * @param  array<string, mixed>  $input
      * @return void
      */
     public function update($user, $tenant, $role, array $input)
@@ -38,9 +38,19 @@ class UpdateRole
         $role->forceFill([
             'name' => $input['name'],
             'description' => $input['description'] ?? null,
-            'permissions' => Jetstream::validPermissions($input['permissions']),
+            'permissions' => Jetstream::validPermissions(self::stringList($input['permissions'])),
         ])->save();
 
         app(RoleRegistry::class)->flush();
+    }
+
+    /**
+     * Normalize untrusted input into a list of strings.
+     *
+     * @return list<string>
+     */
+    protected static function stringList(mixed $value): array
+    {
+        return is_array($value) ? array_values(array_filter($value, 'is_string')) : [];
     }
 }

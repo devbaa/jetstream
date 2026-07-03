@@ -20,7 +20,7 @@ class EnsureTenantContext
     {
         $user = $request->user();
 
-        if ($user && Jetstream::userHasTenantFeatures($user)) {
+        if ($user instanceof \App\Models\User && Jetstream::userHasTenantFeatures($user)) {
             $tenant = $user->currentTenant;
 
             if ($tenant && ! $user->belongsToTenant($tenant)) {
@@ -42,8 +42,8 @@ class EnsureTenantContext
     /**
      * Heal a current team selection that points into another tenant.
      *
-     * @param  mixed  $user
-     * @param  mixed  $tenant
+     * @param  \App\Models\User  $user
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return void
      */
     protected function ensureCurrentTeamIsWithinTenant($user, $tenant)

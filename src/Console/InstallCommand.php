@@ -232,7 +232,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
         (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/profile', resource_path('views/profile'));
         (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/auth', resource_path('views/auth'));
 
-        if (! Str::contains(file_get_contents(base_path('routes/web.php')), "'/dashboard'")) {
+        if (! Str::contains((string) file_get_contents(base_path('routes/web.php')), "'/dashboard'")) {
             (new Filesystem)->append(base_path('routes/web.php'), $this->livewireRouteDefinition());
         }
 
@@ -480,10 +480,17 @@ EOF;
      */
     protected function hasComposerPackage($package)
     {
-        $packages = json_decode(file_get_contents(base_path('composer.json')), true);
+        $packages = json_decode((string) file_get_contents(base_path('composer.json')), true);
 
-        return array_key_exists($package, $packages['require'] ?? [])
-            || array_key_exists($package, $packages['require-dev'] ?? []);
+        if (! is_array($packages)) {
+            return false;
+        }
+
+        $require = $packages['require'] ?? [];
+        $requireDev = $packages['require-dev'] ?? [];
+
+        return (is_array($require) && array_key_exists($package, $require))
+            || (is_array($requireDev) && array_key_exists($package, $requireDev));
     }
 
     /**
@@ -496,13 +503,13 @@ EOF;
     {
         $composer = $this->option('composer');
 
-        if ($composer !== 'global') {
-            $command = [$this->phpBinary(), $composer, 'require'];
-        }
+        $command = is_string($composer) && $composer !== 'global'
+            ? [$this->phpBinary(), $composer, 'require']
+            : ['composer', 'require'];
 
         $command = array_merge(
-            $command ?? ['composer', 'require'],
-            is_array($packages) ? $packages : func_get_args()
+            $command,
+            array_values(array_filter(is_array($packages) ? $packages : func_get_args(), 'is_string'))
         );
 
         return ! (new Process($command, base_path(), ['COMPOSER_MEMORY_LIMIT' => '-1']))
@@ -522,13 +529,13 @@ EOF;
     {
         $composer = $this->option('composer');
 
-        if ($composer !== 'global') {
-            $command = [$this->phpBinary(), $composer, 'remove', '--dev'];
-        }
+        $command = is_string($composer) && $composer !== 'global'
+            ? [$this->phpBinary(), $composer, 'remove', '--dev']
+            : ['composer', 'remove', '--dev'];
 
         $command = array_merge(
-            $command ?? ['composer', 'remove', '--dev'],
-            is_array($packages) ? $packages : func_get_args()
+            $command,
+            array_values(array_filter(is_array($packages) ? $packages : func_get_args(), 'is_string'))
         );
 
         return (new Process($command, base_path(), ['COMPOSER_MEMORY_LIMIT' => '-1']))
@@ -548,13 +555,13 @@ EOF;
     {
         $composer = $this->option('composer');
 
-        if ($composer !== 'global') {
-            $command = [$this->phpBinary(), $composer, 'require', '--dev'];
-        }
+        $command = is_string($composer) && $composer !== 'global'
+            ? [$this->phpBinary(), $composer, 'require', '--dev']
+            : ['composer', 'require', '--dev'];
 
         $command = array_merge(
-            $command ?? ['composer', 'require', '--dev'],
-            is_array($packages) ? $packages : func_get_args()
+            $command,
+            array_values(array_filter(is_array($packages) ? $packages : func_get_args(), 'is_string'))
         );
 
         return (new Process($command, base_path(), ['COMPOSER_MEMORY_LIMIT' => '-1']))
@@ -567,7 +574,7 @@ EOF;
     /**
      * Update the "package.json" file.
      *
-     * @param  callable  $callback
+     * @param  callable(array<string, string>, string): array<string, string>  $callback
      * @param  bool  $dev
      * @return void
      */
@@ -579,19 +586,46 @@ EOF;
 
         $configurationKey = $dev ? 'devDependencies' : 'dependencies';
 
-        $packages = json_decode(file_get_contents(base_path('package.json')), true);
+        $packages = json_decode((string) file_get_contents(base_path('package.json')), true);
 
-        $packages[$configurationKey] = $callback(
-            array_key_exists($configurationKey, $packages) ? $packages[$configurationKey] : [],
+        if (! is_array($packages)) {
+            return;
+        }
+
+        $current = $packages[$configurationKey] ?? [];
+
+        $updated = $callback(
+            is_array($current) ? self::stringMap($current) : [],
             $configurationKey
         );
 
-        ksort($packages[$configurationKey]);
+        ksort($updated);
+
+        $packages[$configurationKey] = $updated;
 
         file_put_contents(
             base_path('package.json'),
             json_encode($packages, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT).PHP_EOL
         );
+    }
+
+    /**
+     * Reduce the given array to its string keys and string values.
+     *
+     * @param  array<mixed>  $values
+     * @return array<string, string>
+     */
+    protected static function stringMap(array $values): array
+    {
+        $result = [];
+
+        foreach ($values as $key => $value) {
+            if (is_string($key) && is_string($value)) {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -614,13 +648,13 @@ EOF;
      * Replace a given string within a given file.
      *
      * @param  string  $replace
-     * @param  string|array  $search
+     * @param  string|array<int, string>  $search
      * @param  string  $path
      * @return void
      */
     protected function replaceInFile($search, $replace, $path)
     {
-        file_put_contents($path, str_replace($search, $replace, file_get_contents($path)));
+        file_put_contents($path, str_replace($search, $replace, (string) file_get_contents($path)));
     }
 
     /**
@@ -653,7 +687,7 @@ EOF;
     /**
      * Run the given commands.
      *
-     * @param  array  $commands
+     * @param  array<int, string>  $commands
      * @return void
      */
     protected function runCommands($commands)
@@ -676,7 +710,7 @@ EOF;
     /**
      * Prompt for missing input arguments using the returned questions.
      *
-     * @return array
+     * @return array<string, callable>
      */
     protected function promptForMissingArgumentsUsing()
     {
@@ -706,7 +740,7 @@ EOF;
                 'verification' => 'Email verification',
                 'dark' => 'Dark mode',
             ])->sort()->all(),
-        ))->each(fn ($option) => $input->setOption($option, true));
+        ))->each(fn ($option) => $input->setOption((string) $option, true));
 
         $input->setOption('pest', select(
             label: 'Which testing framework do you prefer?',

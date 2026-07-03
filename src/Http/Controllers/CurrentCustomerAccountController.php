@@ -21,9 +21,9 @@ class CurrentCustomerAccountController extends Controller
         $account = Jetstream::newCustomerAccountModel()
             ->newQuery()
             ->withoutTenancy()
-            ->findOrFail($request->customer_account_id);
+            ->findOrFail($request->integer('customer_account_id'));
 
-        if (! $request->user()->switchCustomerAccount($account)) {
+        if (! Jetstream::currentUser()->switchCustomerAccount($account)) {
             abort(403);
         }
 

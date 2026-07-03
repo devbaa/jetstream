@@ -15,8 +15,8 @@ class UpdateTeamMemberRole
     /**
      * Update the role for the given team member.
      *
-     * @param  mixed  $user
-     * @param  mixed  $team
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Team  $team
      * @param  int  $teamMemberId
      * @param  string  $role
      * @return void

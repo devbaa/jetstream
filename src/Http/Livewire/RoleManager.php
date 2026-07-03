@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
 use Laravel\Jetstream\Actions\CreateRole;
 use Laravel\Jetstream\Actions\DeleteRole;
 use Laravel\Jetstream\Actions\UpdateRole;
@@ -13,14 +12,14 @@ use Laravel\Jetstream\RoleRegistry;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class RoleManager extends Component
 {
     /**
      * The tenant instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Tenant
      */
     public $tenant;
 
@@ -41,7 +40,7 @@ class RoleManager extends Component
     /**
      * The role form state.
      *
-     * @var array
+     * @var array{key: string, name: string, description: string, permissions: list<string>}
      */
     public $roleForm = [
         'key' => '',
@@ -67,7 +66,7 @@ class RoleManager extends Component
     /**
      * Mount the component.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @return void
      */
     public function mount($tenant)
@@ -117,7 +116,7 @@ class RoleManager extends Component
                 'key' => $tenantRole->key,
                 'name' => $tenantRole->name,
                 'description' => (string) $tenantRole->description,
-                'permissions' => (array) $tenantRole->permissions,
+                'permissions' => array_values($tenantRole->permissions),
             ];
         } else {
             $role = app(RoleRegistry::class)->find($key, $this->tenant->id);
@@ -132,7 +131,7 @@ class RoleManager extends Component
                 'key' => $role->key,
                 'name' => $role->name,
                 'description' => (string) $role->description,
-                'permissions' => (array) $role->permissions,
+                'permissions' => $role->permissions,
             ];
         }
 
@@ -159,7 +158,7 @@ class RoleManager extends Component
 
         $this->managingRole = false;
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
 
         $this->dispatch('saved');
     }
@@ -206,7 +205,7 @@ class RoleManager extends Component
 
         $this->roleIdBeingDeleted = null;
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
     }
 
     /**
@@ -216,13 +215,13 @@ class RoleManager extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**
      * Get all of the roles available to the tenant.
      *
-     * @return array
+     * @return list<\Laravel\Jetstream\Role>
      */
     public function getRolesProperty()
     {
@@ -232,17 +231,23 @@ class RoleManager extends Component
     /**
      * Get the keys of the roles that are owned by the tenant.
      *
-     * @return array
+     * @return array<string, int>
      */
     public function getCustomRoleKeysProperty()
     {
-        return $this->tenant->roles->keyBy('key')->map->id->all();
+        $keys = [];
+
+        foreach ($this->tenant->roles as $role) {
+            $keys[$role->key] = $role->id;
+        }
+
+        return $keys;
     }
 
     /**
      * Get the application's permission catalog.
      *
-     * @return array
+     * @return list<string>
      */
     public function getAvailablePermissionsProperty()
     {

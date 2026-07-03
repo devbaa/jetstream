@@ -4,40 +4,40 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Contracts\UpdatesTeamNames;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class UpdateTeamNameForm extends Component
 {
     /**
      * The team instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Team
      */
     public $team;
 
     /**
      * The component's state.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     public $state = [];
 
     /**
      * Mount the component.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team  $team
      * @return void
      */
     public function mount($team)
     {
         $this->team = $team;
 
-        $this->state = $team->withoutRelations()->toArray();
+        $this->state = array_filter($team->withoutRelations()->toArray(), 'is_string', ARRAY_FILTER_USE_KEY);
     }
 
     /**
@@ -64,7 +64,7 @@ class UpdateTeamNameForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

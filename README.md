@@ -2,7 +2,7 @@
 
 # Jetstream SaaS
 
-An opinionated, Livewire-only fork of [Laravel Jetstream](https://jetstream.laravel.com) that ships a complete multi-tenant SaaS architecture out of the box. It targets **Laravel 13+ / PHP 8.3+** only and does not track upstream Jetstream releases.
+An opinionated, Livewire-only fork of [Laravel Jetstream](https://jetstream.laravel.com) that ships a complete multi-tenant SaaS architecture out of the box. It targets **Laravel 13+ / PHP 8.4+** only and does not track upstream Jetstream releases.
 
 ## What you get
 
@@ -34,7 +34,7 @@ Set `JETSTREAM_ADMIN_EMAIL` in your `.env` to flag your own user as the system a
 ## Quality gates
 
 - `declare(strict_types=1)` across the entire codebase.
-- [Larastan](https://github.com/larastan/larastan) level 5 with typed model swap points (`class-string<...>` contracts) — run `vendor/bin/phpstan analyse`.
+- [Larastan](https://github.com/larastan/larastan) at **level max** with typed model swap points (`class-string<...>` contracts) — run `vendor/bin/phpstan analyse`.
 - Full package test suite on Orchestra Testbench — run `vendor/bin/phpunit`.
 
 ## License

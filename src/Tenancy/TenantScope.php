@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 
+/**
+ * @implements Scope<\Illuminate\Database\Eloquent\Model>
+ */
 class TenantScope implements Scope
 {
     /**

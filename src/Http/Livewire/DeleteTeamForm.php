@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Actions\ValidateTeamDeletion;
 use Laravel\Jetstream\Contracts\DeletesTeams;
 use Laravel\Jetstream\RedirectsActions;
@@ -17,7 +17,7 @@ class DeleteTeamForm extends Component
     /**
      * The team instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Team
      */
     public $team;
 
@@ -31,7 +31,7 @@ class DeleteTeamForm extends Component
     /**
      * Mount the component.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team  $team
      * @return void
      */
     public function mount($team)
@@ -48,11 +48,9 @@ class DeleteTeamForm extends Component
      */
     public function deleteTeam(ValidateTeamDeletion $validator, DeletesTeams $deleter)
     {
-        $validator->validate(Auth::user(), $this->team);
+        $validator->validate(Jetstream::currentUser(), $this->team);
 
         $deleter->delete($this->team);
-
-        $this->team = null;
 
         return $this->redirectPath($deleter);
     }

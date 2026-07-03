@@ -39,7 +39,7 @@ class CustomerInvitationController extends Controller
             $account->users()->attach($user);
         } else {
             $account = app(CreatesCustomerAccounts::class)->create(
-                $invitation->tenant()->first(), $user, ['name' => $user->name]
+                $invitation->tenant()->firstOrFail(), $user, ['name' => $user->name]
             );
         }
 
@@ -50,7 +50,7 @@ class CustomerInvitationController extends Controller
         CustomerInvitationAccepted::dispatch($account, $user);
 
         return redirect()->route('portal.show')->banner(
-            __('Great! You have accepted the invitation to become a customer of :tenant.', ['tenant' => $account->tenant()->first()->name]),
+            __('Great! You have accepted the invitation to become a customer of :tenant.', ['tenant' => $account->tenant()->firstOrFail()->name]),
         );
     }
 
@@ -67,7 +67,7 @@ class CustomerInvitationController extends Controller
 
         $invitation = (new $model)->newQuery()->withoutTenancy()->whereKey($invitationId)->firstOrFail();
 
-        $user = $request->user();
+        $user = Jetstream::currentUser();
 
         $account = $invitation->customer_account_id
                         ? $invitation->customerAccount()->withoutTenancy()->first()

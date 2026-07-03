@@ -4,21 +4,20 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire\Portal;
 
-use Illuminate\Support\Facades\Auth;
 use Laravel\Jetstream\Contracts\InvitesCustomers;
 use Laravel\Jetstream\Contracts\RemovesCustomerAccountMembers;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class AccountMemberManager extends Component
 {
     /**
      * The customer account instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\CustomerAccount
      */
     public $account;
 
@@ -46,7 +45,7 @@ class AccountMemberManager extends Component
     /**
      * The "add member" form state.
      *
-     * @var array
+     * @var array{email: string}
      */
     public $addMemberForm = [
         'email' => '',
@@ -55,7 +54,7 @@ class AccountMemberManager extends Component
     /**
      * Mount the component.
      *
-     * @param  mixed  $account
+     * @param  \Laravel\Jetstream\CustomerAccount  $account
      * @return void
      */
     public function mount($account)
@@ -74,7 +73,7 @@ class AccountMemberManager extends Component
 
         $inviter->invite(
             $this->user,
-            $this->account->tenant()->first(),
+            $this->account->tenant()->firstOrFail(),
             $this->addMemberForm['email'],
             $this->account
         );
@@ -83,7 +82,7 @@ class AccountMemberManager extends Component
             'email' => '',
         ];
 
-        $this->account = $this->account->fresh();
+        $this->account->refresh();
 
         $this->dispatch('saved');
     }
@@ -100,7 +99,7 @@ class AccountMemberManager extends Component
             $this->account->customerInvitations()->whereKey($invitationId)->delete();
         }
 
-        $this->account = $this->account->fresh();
+        $this->account->refresh();
     }
 
     /**
@@ -141,6 +140,8 @@ class AccountMemberManager extends Component
      */
     public function removeMember(RemovesCustomerAccountMembers $remover)
     {
+        abort_if(is_null($this->memberIdBeingRemoved), 403);
+
         $remover->remove(
             $this->user,
             $this->account,
@@ -151,7 +152,7 @@ class AccountMemberManager extends Component
 
         $this->memberIdBeingRemoved = null;
 
-        $this->account = $this->account->fresh();
+        $this->account->refresh();
     }
 
     /**
@@ -161,7 +162,7 @@ class AccountMemberManager extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

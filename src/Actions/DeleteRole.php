@@ -14,9 +14,9 @@ class DeleteRole
     /**
      * Delete the given tenant role.
      *
-     * @param  mixed  $user
-     * @param  mixed  $tenant
-     * @param  mixed  $role
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Tenant  $tenant
+     * @param  \Laravel\Jetstream\DatabaseRole  $role
      * @return void
      */
     public function delete($user, $tenant, $role)
@@ -39,8 +39,8 @@ class DeleteRole
     /**
      * Determine if the role's key is still assigned within the tenant.
      *
-     * @param  mixed  $tenant
-     * @param  mixed  $role
+     * @param  \Laravel\Jetstream\Tenant  $tenant
+     * @param  \Laravel\Jetstream\DatabaseRole  $role
      * @return bool
      */
     protected function roleIsAssigned($tenant, $role)

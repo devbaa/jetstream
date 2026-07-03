@@ -9,7 +9,7 @@ trait HasCustomerAccounts
     /**
      * Determine if the given customer account is the current customer account.
      *
-     * @param  mixed  $account
+     * @param  \Laravel\Jetstream\CustomerAccount|null  $account
      * @return bool
      */
     public function isCurrentCustomerAccount($account)
@@ -24,7 +24,7 @@ trait HasCustomerAccounts
      * A user's customer accounts span tenants, so this relation is exempt
      * from tenant scoping.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Laravel\Jetstream\CustomerAccount, $this>
      */
     public function currentCustomerAccount()
     {
@@ -35,7 +35,7 @@ trait HasCustomerAccounts
     /**
      * Switch the user's customer context to the given customer account.
      *
-     * @param  mixed  $account
+     * @param  \Laravel\Jetstream\CustomerAccount|null  $account
      * @return bool
      */
     public function switchCustomerAccount($account)
@@ -56,7 +56,7 @@ trait HasCustomerAccounts
     /**
      * Get all of the customer accounts the user owns or belongs to.
      *
-     * @return \Illuminate\Support\Collection
+     * @return \Illuminate\Support\Collection<int, \Laravel\Jetstream\CustomerAccount>
      */
     public function allCustomerAccounts()
     {
@@ -69,7 +69,7 @@ trait HasCustomerAccounts
      * A user's customer accounts span tenants, so this relation is exempt
      * from tenant scoping.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\CustomerAccount, $this>
      */
     public function ownedCustomerAccounts()
     {
@@ -83,7 +83,7 @@ trait HasCustomerAccounts
      * A user's customer accounts span tenants, so this relation is exempt
      * from tenant scoping.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Laravel\Jetstream\CustomerAccount, $this>
      */
     public function customerAccounts()
     {
@@ -95,7 +95,7 @@ trait HasCustomerAccounts
     /**
      * Determine if the user owns the given customer account.
      *
-     * @param  mixed  $account
+     * @param  \Laravel\Jetstream\CustomerAccount|null  $account
      * @return bool
      */
     public function ownsCustomerAccount($account)
@@ -110,7 +110,7 @@ trait HasCustomerAccounts
     /**
      * Determine if the user belongs to the given customer account.
      *
-     * @param  mixed  $account
+     * @param  \Laravel\Jetstream\CustomerAccount|null  $account
      * @return bool
      */
     public function belongsToCustomerAccount($account)
@@ -127,7 +127,7 @@ trait HasCustomerAccounts
     /**
      * Determine if the user is a customer of the given tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return bool
      */
     public function isCustomerOf($tenant)

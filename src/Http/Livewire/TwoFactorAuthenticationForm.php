@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
@@ -14,7 +14,7 @@ use Laravel\Jetstream\ConfirmsPasswords;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class TwoFactorAuthenticationForm extends Component
 {
@@ -56,8 +56,8 @@ class TwoFactorAuthenticationForm extends Component
     public function mount()
     {
         if (Features::optionEnabled(Features::twoFactorAuthentication(), 'confirm') &&
-            is_null(Auth::user()->two_factor_confirmed_at)) {
-            app(DisableTwoFactorAuthentication::class)(Auth::user());
+            is_null(Jetstream::currentUser()->two_factor_confirmed_at)) {
+            app(DisableTwoFactorAuthentication::class)(Jetstream::currentUser());
         }
     }
 
@@ -73,7 +73,7 @@ class TwoFactorAuthenticationForm extends Component
             $this->ensurePasswordIsConfirmed();
         }
 
-        $enable(Auth::user());
+        $enable(Jetstream::currentUser());
 
         $this->showingQrCode = true;
 
@@ -96,7 +96,7 @@ class TwoFactorAuthenticationForm extends Component
             $this->ensurePasswordIsConfirmed();
         }
 
-        $confirm(Auth::user(), $this->code);
+        $confirm(Jetstream::currentUser(), $this->code ?? '');
 
         $this->showingQrCode = false;
         $this->showingConfirmation = false;
@@ -129,7 +129,7 @@ class TwoFactorAuthenticationForm extends Component
             $this->ensurePasswordIsConfirmed();
         }
 
-        $generate(Auth::user());
+        $generate(Jetstream::currentUser());
 
         $this->showingRecoveryCodes = true;
     }
@@ -146,7 +146,7 @@ class TwoFactorAuthenticationForm extends Component
             $this->ensurePasswordIsConfirmed();
         }
 
-        $disable(Auth::user());
+        $disable(Jetstream::currentUser());
 
         $this->showingQrCode = false;
         $this->showingConfirmation = false;
@@ -160,7 +160,7 @@ class TwoFactorAuthenticationForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

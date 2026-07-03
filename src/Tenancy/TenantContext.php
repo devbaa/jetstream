@@ -51,7 +51,9 @@ class TenantContext
      */
     public function currentId()
     {
-        return $this->tenant?->getKey();
+        $key = $this->tenant?->getKey();
+
+        return is_int($key) || is_string($key) ? $key : null;
     }
 
     /**
@@ -67,7 +69,10 @@ class TenantContext
     /**
      * Execute the given callback with tenant scoping bypassed.
      *
-     * @return mixed
+     * @template TReturn
+     *
+     * @param  \Closure(): TReturn  $callback
+     * @return TReturn
      */
     public function bypass(Closure $callback)
     {
@@ -98,8 +103,11 @@ class TenantContext
      * Queued jobs and other code running outside an HTTP request have no
      * tenant context and therefore run unscoped unless wrapped in this method.
      *
+     * @template TReturn
+     *
      * @param  \Illuminate\Database\Eloquent\Model|null  $tenant
-     * @return mixed
+     * @param  \Closure(): TReturn  $callback
+     * @return TReturn
      */
     public function runFor(?Model $tenant, Closure $callback)
     {

@@ -29,6 +29,9 @@ use Laravel\Sanctum\HasApiTokens;
  * @property int|null $current_tenant_id
  * @property int|null $current_customer_account_id
  * @property bool $is_system_admin
+ * @property string|null $two_factor_secret
+ * @property string|null $two_factor_recovery_codes
+ * @property \Illuminate\Support\Carbon|null $two_factor_confirmed_at
  */
 class User extends Authenticatable implements PasskeyUser
 {

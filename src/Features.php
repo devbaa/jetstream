@@ -14,7 +14,9 @@ class Features
      */
     public static function enabled(string $feature)
     {
-        return in_array($feature, config('jetstream.features', []));
+        $features = config('jetstream.features', []);
+
+        return is_array($features) && in_array($feature, $features);
     }
 
     /**
@@ -143,7 +145,7 @@ class Features
     /**
      * Enable the teams feature.
      *
-     * @param  array  $options
+     * @param  array<string, bool>  $options
      * @return string
      */
     public static function teams(array $options = [])
@@ -158,7 +160,7 @@ class Features
     /**
      * Enable the multi-tenant SaaS feature.
      *
-     * @param  array  $options
+     * @param  array<string, bool>  $options
      * @return string
      */
     public static function tenants(array $options = [])

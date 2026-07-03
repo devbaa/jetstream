@@ -4,28 +4,27 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
 use Laravel\Jetstream\Contracts\DeletesCustomerAccounts;
 use Laravel\Jetstream\Contracts\InvitesCustomers;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class CustomerAccountManager extends Component
 {
     /**
      * The tenant instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Tenant
      */
     public $tenant;
 
     /**
      * The "invite customer" form state.
      *
-     * @var array
+     * @var array{email: string}
      */
     public $inviteCustomerForm = [
         'email' => '',
@@ -48,7 +47,7 @@ class CustomerAccountManager extends Component
     /**
      * Mount the component.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @return void
      */
     public function mount($tenant)
@@ -75,7 +74,7 @@ class CustomerAccountManager extends Component
             'email' => '',
         ];
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
 
         $this->dispatch('saved');
     }
@@ -92,7 +91,7 @@ class CustomerAccountManager extends Component
             $this->tenant->customerInvitations()->whereKey($invitationId)->delete();
         }
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
     }
 
     /**
@@ -125,7 +124,7 @@ class CustomerAccountManager extends Component
 
         $this->accountIdBeingDeleted = null;
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
     }
 
     /**
@@ -135,13 +134,13 @@ class CustomerAccountManager extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**
      * Get the tenant's customer accounts.
      *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return \Illuminate\Database\Eloquent\Collection<int, \Laravel\Jetstream\CustomerAccount>
      */
     public function getAccountsProperty()
     {
@@ -151,7 +150,7 @@ class CustomerAccountManager extends Component
     /**
      * Get the tenant's pending new-customer invitations.
      *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return \Illuminate\Database\Eloquent\Collection<int, \Laravel\Jetstream\CustomerInvitation>
      */
     public function getPendingInvitationsProperty()
     {

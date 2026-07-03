@@ -21,8 +21,10 @@ class TermsOfServiceController extends Controller
     {
         $termsFile = Jetstream::localizedMarkdownPath('terms.md');
 
+        abort_if(is_null($termsFile), 404);
+
         return view('terms', [
-            'terms' => Str::markdown(file_get_contents($termsFile)),
+            'terms' => Str::markdown((string) file_get_contents($termsFile)),
         ]);
     }
 }

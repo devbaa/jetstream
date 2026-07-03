@@ -11,7 +11,7 @@ class NavigationMenu extends Component
     /**
      * The component's listeners.
      *
-     * @var array
+     * @var array<string, string>
      */
     protected $listeners = [
         'refresh-navigation-menu' => '$refresh',

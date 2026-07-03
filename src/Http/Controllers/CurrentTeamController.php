@@ -18,12 +18,12 @@ class CurrentTeamController extends Controller
      */
     public function update(Request $request)
     {
-        $team = Jetstream::newTeamModel()->findOrFail($request->team_id);
+        $team = Jetstream::newTeamModel()->newQuery()->findOrFail($request->integer('team_id'));
 
-        if (! $request->user()->switchTeam($team)) {
+        if (! Jetstream::currentUser()->switchTeam($team)) {
             abort(403);
         }
 
-        return redirect(config('fortify.home'), 303);
+        return redirect(Jetstream::homePath(), 303);
     }
 }

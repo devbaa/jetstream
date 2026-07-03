@@ -18,10 +18,10 @@ class CreateRole
      * A tenant role may share its key with an application default role, in
      * which case it overrides that default within the tenant.
      *
-     * @param  mixed  $user
-     * @param  mixed  $tenant
-     * @param  array  $input
-     * @return mixed
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Tenant  $tenant
+     * @param  array<string, mixed>  $input
+     * @return \Laravel\Jetstream\DatabaseRole
      */
     public function create($user, $tenant, array $input)
     {
@@ -48,11 +48,21 @@ class CreateRole
             'key' => $input['key'],
             'name' => $input['name'],
             'description' => $input['description'] ?? null,
-            'permissions' => Jetstream::validPermissions($input['permissions']),
+            'permissions' => Jetstream::validPermissions(self::stringList($input['permissions'])),
         ]);
 
         app(RoleRegistry::class)->flush();
 
         return $role;
+    }
+
+    /**
+     * Normalize untrusted input into a list of strings.
+     *
+     * @return list<string>
+     */
+    protected static function stringList(mixed $value): array
+    {
+        return is_array($value) ? array_values(array_filter($value, 'is_string')) : [];
     }
 }

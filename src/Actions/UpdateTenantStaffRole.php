@@ -15,8 +15,8 @@ class UpdateTenantStaffRole
     /**
      * Update the role for the given tenant staff member.
      *
-     * @param  mixed  $user
-     * @param  mixed  $tenant
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @param  int  $staffMemberId
      * @param  string  $role
      * @return void
@@ -35,6 +35,6 @@ class UpdateTenantStaffRole
             'role' => $role,
         ]);
 
-        TenantStaffUpdated::dispatch($tenant->fresh(), Jetstream::findUserByIdOrFail($staffMemberId));
+        TenantStaffUpdated::dispatch($tenant->refresh(), Jetstream::findUserByIdOrFail($staffMemberId));
     }
 }

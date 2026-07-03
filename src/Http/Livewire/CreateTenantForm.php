@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Contracts\CreatesTenants;
 use Laravel\Jetstream\RedirectsActions;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class CreateTenantForm extends Component
 {
@@ -19,7 +19,7 @@ class CreateTenantForm extends Component
     /**
      * The component's state.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     public $state = [];
 
@@ -33,7 +33,7 @@ class CreateTenantForm extends Component
     {
         $this->resetErrorBag();
 
-        $creator->create(Auth::user(), $this->state);
+        $creator->create(Jetstream::currentUser(), $this->state);
 
         return $this->redirectPath($creator);
     }
@@ -45,7 +45,7 @@ class CreateTenantForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

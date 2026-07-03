@@ -24,7 +24,7 @@ class EnsureCustomerAccountContext
     {
         $user = $request->user();
 
-        abort_unless($user && array_key_exists(
+        abort_unless($user instanceof \App\Models\User && array_key_exists(
             HasCustomerAccounts::class, class_uses_recursive($user)
         ), 403);
 
@@ -59,8 +59,8 @@ class EnsureCustomerAccountContext
     /**
      * Get the user's only customer account, if they have exactly one.
      *
-     * @param  mixed  $user
-     * @return mixed
+     * @param  \App\Models\User  $user
+     * @return \Laravel\Jetstream\CustomerAccount|null
      */
     protected function onlyAccountOf($user)
     {

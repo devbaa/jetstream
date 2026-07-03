@@ -12,7 +12,7 @@ trait HasTenants
     /**
      * Determine if the given tenant is the current tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return bool
      */
     public function isCurrentTenant($tenant)
@@ -25,7 +25,7 @@ trait HasTenants
      *
      * Unlike teams, users do not receive a personal tenant, so this may be null.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Laravel\Jetstream\Tenant, $this>
      */
     public function currentTenant()
     {
@@ -35,7 +35,7 @@ trait HasTenants
     /**
      * Switch the user's context to the given tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return bool
      */
     public function switchTenant($tenant)
@@ -68,7 +68,7 @@ trait HasTenants
     /**
      * Get all of the tenants the user owns or belongs to.
      *
-     * @return \Illuminate\Support\Collection
+     * @return \Illuminate\Support\Collection<int, \Laravel\Jetstream\Tenant>
      */
     public function allTenants()
     {
@@ -78,7 +78,7 @@ trait HasTenants
     /**
      * Get all of the tenants the user owns.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\Tenant, $this>
      */
     public function ownedTenants()
     {
@@ -88,7 +88,7 @@ trait HasTenants
     /**
      * Get all of the tenants the user belongs to.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Laravel\Jetstream\Tenant, $this, \Laravel\Jetstream\TenantMembership, 'membership'>
      */
     public function tenants()
     {
@@ -101,7 +101,7 @@ trait HasTenants
     /**
      * Determine if the user owns the given tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return bool
      */
     public function ownsTenant($tenant)
@@ -116,7 +116,7 @@ trait HasTenants
     /**
      * Determine if the user belongs to the given tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return bool
      */
     public function belongsToTenant($tenant)
@@ -133,7 +133,7 @@ trait HasTenants
     /**
      * Get the role that the user has on the tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return \Laravel\Jetstream\Role|null
      */
     public function tenantRole($tenant)
@@ -158,7 +158,7 @@ trait HasTenants
     /**
      * Determine if the user has the given role on the given tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @param  string  $role
      * @return bool
      */
@@ -175,7 +175,7 @@ trait HasTenants
     /**
      * Get the user's permissions for the given tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @return array
      */
     public function tenantPermissions($tenant)
@@ -194,7 +194,7 @@ trait HasTenants
     /**
      * Determine if the user has the given permission on the given tenant.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
      * @param  string  $permission
      * @return bool
      */

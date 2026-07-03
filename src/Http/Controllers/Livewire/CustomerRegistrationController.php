@@ -62,7 +62,7 @@ class CustomerRegistrationController extends Controller
      * Resolve a tenant that allows customer self-registration by its slug.
      *
      * @param  string  $slug
-     * @return mixed
+     * @return \Laravel\Jetstream\Tenant
      */
     protected function resolveTenant($slug)
     {

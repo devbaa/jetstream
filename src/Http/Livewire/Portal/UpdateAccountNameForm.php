@@ -4,41 +4,41 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire\Portal;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class UpdateAccountNameForm extends Component
 {
     /**
      * The customer account instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\CustomerAccount
      */
     public $account;
 
     /**
      * The component's state.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     public $state = [];
 
     /**
      * Mount the component.
      *
-     * @param  mixed  $account
+     * @param  \Laravel\Jetstream\CustomerAccount  $account
      * @return void
      */
     public function mount($account)
     {
         $this->account = $account;
 
-        $this->state = $account->withoutRelations()->toArray();
+        $this->state = array_filter($account->withoutRelations()->toArray(), 'is_string', ARRAY_FILTER_USE_KEY);
     }
 
     /**
@@ -70,7 +70,7 @@ class UpdateAccountNameForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

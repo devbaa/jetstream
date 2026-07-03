@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Illuminate\View\View;
 use Laravel\Fortify\Features;
 use Laravel\Jetstream\ConfirmsPasswords;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class PasskeyManager extends Component
 {
@@ -72,7 +72,7 @@ class PasskeyManager extends Component
     {
         $this->ensurePasswordIsConfirmedWhenRequired();
 
-        Auth::user()?->passkeys()->whereKey($passkeyId)->delete();
+        Jetstream::currentUser()->passkeys()->whereKey($passkeyId)->delete();
     }
 
     /**
@@ -90,7 +90,7 @@ class PasskeyManager extends Component
      */
     public function getUserProperty(): mixed
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**
@@ -98,7 +98,7 @@ class PasskeyManager extends Component
      */
     public function getPasskeysProperty(): mixed
     {
-        return Auth::user()?->passkeys()->latest()->get();
+        return Jetstream::currentUser()->passkeys()->latest()->get();
     }
 
     /**

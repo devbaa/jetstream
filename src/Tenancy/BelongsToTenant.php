@@ -18,13 +18,15 @@ trait BelongsToTenant
     {
         static::addGlobalScope(new TenantScope);
 
-        static::creating(function ($model) {
+        static::creating(function (self $model): void {
             $context = app(TenantContext::class);
+
+            $tenantId = $context->currentId();
 
             if (is_null($model->tenant_id) &&
                 ! $context->shouldBypass() &&
-                ! is_null($context->currentId())) {
-                $model->tenant_id = $context->currentId();
+                is_int($tenantId)) {
+                $model->tenant_id = $tenantId;
             }
         });
     }

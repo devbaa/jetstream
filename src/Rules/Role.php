@@ -21,9 +21,13 @@ class Role implements Rule
      */
     public function passes($attribute, $value)
     {
+        if (! is_string($value)) {
+            return false;
+        }
+
         if (Features::hasTenantFeatures()) {
             return ! is_null(app(RoleRegistry::class)->find(
-                (string) $value, app(TenantContext::class)->currentId()
+                $value, app(TenantContext::class)->currentId()
             ));
         }
 

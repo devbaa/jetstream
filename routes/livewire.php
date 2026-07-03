@@ -26,8 +26,10 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
         Route::get('/privacy-policy', [PrivacyPolicyController::class, 'show'])->name('policy.show');
     }
 
-    $authMiddleware = config('jetstream.guard')
-        ? 'auth:'.config('jetstream.guard')
+    $guard = config('jetstream.guard');
+
+    $authMiddleware = is_string($guard) && $guard !== ''
+        ? 'auth:'.$guard
         : 'auth';
 
     $authSessionMiddleware = config('jetstream.auth_session', false)

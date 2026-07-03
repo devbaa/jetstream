@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
 use Laravel\Jetstream\Actions\UpdateTenantStaffRole;
 use Laravel\Jetstream\Contracts\AddsTenantStaff;
 use Laravel\Jetstream\Contracts\RemovesTenantStaff;
@@ -14,14 +13,14 @@ use Laravel\Jetstream\RoleRegistry;
 use Livewire\Component;
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class TenantStaffManager extends Component
 {
     /**
      * The tenant instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Tenant
      */
     public $tenant;
 
@@ -35,14 +34,14 @@ class TenantStaffManager extends Component
     /**
      * The user that is having their role managed.
      *
-     * @var mixed
+     * @var \App\Models\User|null
      */
     public $managingRoleFor;
 
     /**
      * The current role for the user that is having their role managed.
      *
-     * @var string
+     * @var string|null
      */
     public $currentRole;
 
@@ -70,7 +69,7 @@ class TenantStaffManager extends Component
     /**
      * The "add staff member" form state.
      *
-     * @var array
+     * @var array{email: string, role: string|null}
      */
     public $addStaffForm = [
         'email' => '',
@@ -80,7 +79,7 @@ class TenantStaffManager extends Component
     /**
      * Mount the component.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @return void
      */
     public function mount($tenant)
@@ -109,7 +108,7 @@ class TenantStaffManager extends Component
             'role' => null,
         ];
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
 
         $this->dispatch('saved');
     }
@@ -124,7 +123,7 @@ class TenantStaffManager extends Component
     {
         $this->currentlyManagingRole = true;
         $this->managingRoleFor = Jetstream::findUserByIdOrFail($userId);
-        $this->currentRole = $this->managingRoleFor->tenantRole($this->tenant)->key;
+        $this->currentRole = $this->managingRoleFor->tenantRole($this->tenant)?->key;
     }
 
     /**
@@ -135,14 +134,16 @@ class TenantStaffManager extends Component
      */
     public function updateRole(UpdateTenantStaffRole $updater)
     {
+        abort_if(is_null($this->managingRoleFor), 403);
+
         $updater->update(
             $this->user,
             $this->tenant,
             $this->managingRoleFor->id,
-            $this->currentRole
+            $this->currentRole ?? ''
         );
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
 
         $this->stopManagingRole();
     }
@@ -172,9 +173,9 @@ class TenantStaffManager extends Component
 
         $this->confirmingLeavingTenant = false;
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
 
-        return redirect(config('fortify.home'));
+        return redirect(Jetstream::homePath());
     }
 
     /**
@@ -197,6 +198,8 @@ class TenantStaffManager extends Component
      */
     public function removeStaffMember(RemovesTenantStaff $remover)
     {
+        abort_if(is_null($this->staffIdBeingRemoved), 403);
+
         $remover->remove(
             $this->user,
             $this->tenant,
@@ -207,7 +210,7 @@ class TenantStaffManager extends Component
 
         $this->staffIdBeingRemoved = null;
 
-        $this->tenant = $this->tenant->fresh();
+        $this->tenant->refresh();
     }
 
     /**
@@ -217,25 +220,26 @@ class TenantStaffManager extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**
      * Get the available staff roles.
      *
-     * @return array
+     * @return list<\Laravel\Jetstream\Role>
      */
     public function getRolesProperty()
     {
-        return collect(app(RoleRegistry::class)->all($this->tenant->id))->transform(function ($role) {
-            return with($role->jsonSerialize(), function ($data) {
-                return (new Role(
-                    $data['key'],
-                    $data['name'],
-                    $data['permissions']
-                ))->description($data['description']);
-            });
-        })->values()->all();
+        return array_values(collect(app(RoleRegistry::class)->all($this->tenant->id))->map(function (Role $role): Role {
+            $name = __($role->name);
+            $description = __($role->description ?? '');
+
+            return (new Role(
+                $role->key,
+                is_string($name) ? $name : $role->name,
+                $role->permissions
+            ))->description(is_string($description) ? $description : '');
+        })->all());
     }
 
     /**

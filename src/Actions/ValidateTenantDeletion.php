@@ -11,8 +11,8 @@ class ValidateTenantDeletion
     /**
      * Validate that the tenant can be deleted by the given user.
      *
-     * @param  mixed  $user
-     * @param  mixed  $tenant
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @return void
      */
     public function validate($user, $tenant)

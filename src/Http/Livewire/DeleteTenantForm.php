@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Actions\ValidateTenantDeletion;
 use Laravel\Jetstream\Contracts\DeletesTenants;
 use Laravel\Jetstream\RedirectsActions;
@@ -17,7 +17,7 @@ class DeleteTenantForm extends Component
     /**
      * The tenant instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Tenant
      */
     public $tenant;
 
@@ -31,7 +31,7 @@ class DeleteTenantForm extends Component
     /**
      * Mount the component.
      *
-     * @param  mixed  $tenant
+     * @param  \Laravel\Jetstream\Tenant  $tenant
      * @return void
      */
     public function mount($tenant)
@@ -48,11 +48,9 @@ class DeleteTenantForm extends Component
      */
     public function deleteTenant(ValidateTenantDeletion $validator, DeletesTenants $deleter)
     {
-        $validator->validate(Auth::user(), $this->tenant);
+        $validator->validate(Jetstream::currentUser(), $this->tenant);
 
         $deleter->delete($this->tenant);
-
-        $this->tenant = null;
 
         return $this->redirectPath($deleter);
     }

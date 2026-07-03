@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire\Admin;
 
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Jetstream\Contracts\CreatesTenants;
 use Laravel\Jetstream\Contracts\DeletesTenants;
@@ -15,7 +14,7 @@ use Livewire\Component;
 // v2: impersonation
 
 /**
- * @property-read \App\Models\User|null $user
+ * @property-read \App\Models\User $user
  */
 class TenantManager extends Component
 {
@@ -36,7 +35,7 @@ class TenantManager extends Component
     /**
      * The "create tenant" form state.
      *
-     * @var array
+     * @var array{name: string, owner_email: string}
      */
     public $createTenantForm = [
         'name' => '',
@@ -152,13 +151,13 @@ class TenantManager extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**
      * Get the tenants matching the current search query.
      *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return \Illuminate\Database\Eloquent\Collection<int, \Laravel\Jetstream\Tenant>
      */
     public function getTenantsProperty()
     {
