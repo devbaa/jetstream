@@ -95,6 +95,30 @@ class CustomerAccountManager extends Component
     }
 
     /**
+     * Toggle whether the given customer account is frozen.
+     *
+     * A frozen account's members lose access to the customer portal for the
+     * account until it is unfrozen.
+     *
+     * @param  int  $accountId
+     * @return void
+     */
+    public function toggleAccountFreeze($accountId)
+    {
+        $account = $this->tenant->customerAccounts()->findOrFail($accountId);
+
+        abort_unless($this->user->can('update', $account), 403);
+
+        $account->forceFill([
+            'frozen_at' => $account->isFrozen() ? null : now(),
+        ])->save();
+
+        $this->tenant->refresh();
+
+        $this->dispatch('saved');
+    }
+
+    /**
      * Confirm that the given customer account should be deleted.
      *
      * @param  int  $accountId

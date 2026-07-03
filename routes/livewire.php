@@ -10,6 +10,7 @@ use Laravel\Jetstream\Http\Controllers\CurrentTenantController;
 use Laravel\Jetstream\Http\Controllers\CustomerInvitationController;
 use Laravel\Jetstream\Http\Controllers\Livewire\AdminAuditController;
 use Laravel\Jetstream\Http\Controllers\Livewire\AdminTenantController;
+use Laravel\Jetstream\Http\Controllers\Livewire\AdminUserController;
 use Laravel\Jetstream\Http\Controllers\Livewire\ApiTokenController;
 use Laravel\Jetstream\Http\Controllers\Livewire\CustomerRegistrationController;
 use Laravel\Jetstream\Http\Controllers\Livewire\PortalController;
@@ -39,7 +40,7 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
         ? config('jetstream.auth_session')
         : null;
 
-    Route::group(['middleware' => array_filter([$authMiddleware, $authSessionMiddleware, 'throttle:jetstream'])], function () {
+    Route::group(['middleware' => array_filter([$authMiddleware, $authSessionMiddleware, 'account.active', 'throttle:jetstream'])], function () {
         // User & Profile...
         Route::get('/user/profile', [UserProfileController::class, 'show'])->name('profile.show');
 
@@ -75,6 +76,7 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
                 // System Administration...
                 Route::group(['middleware' => ['system.admin']], function () {
                     Route::get('/admin/tenants', [AdminTenantController::class, 'index'])->name('admin.tenants.index');
+                    Route::get('/admin/users', [AdminUserController::class, 'index'])->name('admin.users.index');
                     Route::get('/admin/audit', [AdminAuditController::class, 'index'])->name('admin.audit.index');
                 });
 

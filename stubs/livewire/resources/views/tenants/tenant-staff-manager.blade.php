@@ -98,9 +98,20 @@
                                 <div class="flex items-center">
                                     <img class="size-8 rounded-full object-cover" src="{{ $user->profile_photo_url }}" alt="{{ $user->name }}">
                                     <div class="ms-4 dark:text-white">{{ $user->name }}</div>
+
+                                    @if ($user->membership->frozen_at)
+                                        <span class="ms-3 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ __('Frozen') }}</span>
+                                    @endif
                                 </div>
 
                                 <div class="flex items-center">
+                                    <!-- Freeze / Unfreeze Staff Member -->
+                                    @if (Gate::check('updateTenantStaff', $tenant) && $this->user->id !== $user->id)
+                                        <button class="ms-2 text-sm text-gray-400 underline" wire:click="toggleStaffFreeze('{{ $user->id }}')">
+                                            {{ $user->membership->frozen_at ? __('Unfreeze') : __('Freeze') }}
+                                        </button>
+                                    @endif
+
                                     <!-- Manage Staff Member Role -->
                                     @if (Gate::check('updateTenantStaff', $tenant) && $user->membership->role)
                                         <button class="ms-2 text-sm text-gray-400 underline" wire:click="manageRole('{{ $user->id }}')">

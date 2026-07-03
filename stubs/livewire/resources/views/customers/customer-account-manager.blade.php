@@ -92,6 +92,15 @@
                             </div>
 
                             <div class="flex items-center">
+                                @if ($account->isFrozen())
+                                    <span class="ms-6 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ __('Frozen') }}</span>
+                                @endif
+
+                                <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
+                                                    wire:click="toggleAccountFreeze({{ $account->id }})">
+                                    {{ $account->isFrozen() ? __('Unfreeze') : __('Freeze') }}
+                                </button>
+
                                 <button class="cursor-pointer ms-6 text-sm text-red-500 focus:outline-none"
                                                     wire:click="confirmAccountDeletion({{ $account->id }})">
                                     {{ __('Delete') }}

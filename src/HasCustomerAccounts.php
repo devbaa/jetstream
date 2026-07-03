@@ -40,7 +40,7 @@ trait HasCustomerAccounts
      */
     public function switchCustomerAccount($account)
     {
-        if (! $this->belongsToCustomerAccount($account)) {
+        if (! $this->hasActiveCustomerAccountAccess($account)) {
             return false;
         }
 
@@ -51,6 +51,26 @@ trait HasCustomerAccounts
         $this->setRelation('currentCustomerAccount', $account);
 
         return true;
+    }
+
+    /**
+     * Determine if the user currently has usable access to the given account.
+     *
+     * Access requires membership (or ownership), an unfrozen account, and an
+     * unfrozen tenant.
+     *
+     * @param  \Laravel\Jetstream\CustomerAccount|null  $account
+     * @return bool
+     */
+    public function hasActiveCustomerAccountAccess($account)
+    {
+        if (! $this->belongsToCustomerAccount($account) || $account === null || $account->isFrozen()) {
+            return false;
+        }
+
+        $tenant = $account->tenant;
+
+        return $tenant !== null && ! $tenant->isFrozen();
     }
 
     /**

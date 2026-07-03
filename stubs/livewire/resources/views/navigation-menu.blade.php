@@ -179,6 +179,10 @@
                                     {{ __('Tenant Administration') }}
                                 </x-dropdown-link>
 
+                                <x-dropdown-link href="{{ route('admin.users.index') }}">
+                                    {{ __('User Administration') }}
+                                </x-dropdown-link>
+
                                 <x-dropdown-link href="{{ route('admin.audit.index') }}">
                                     {{ __('Audit Log') }}
                                 </x-dropdown-link>

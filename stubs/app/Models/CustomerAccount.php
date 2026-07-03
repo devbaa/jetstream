@@ -32,4 +32,16 @@ class CustomerAccount extends JetstreamCustomerAccount
         'created' => CustomerAccountCreated::class,
         'deleted' => CustomerAccountDeleted::class,
     ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'frozen_at' => 'datetime',
+        ];
+    }
 }

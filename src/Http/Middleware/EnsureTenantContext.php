@@ -23,7 +23,7 @@ class EnsureTenantContext
         if ($user instanceof \App\Models\User && Jetstream::userHasTenantFeatures($user)) {
             $tenant = $user->currentTenant;
 
-            if ($tenant && ! $user->belongsToTenant($tenant)) {
+            if ($tenant && ! $user->hasActiveTenantAccess($tenant)) {
                 $user->forceFill(['current_tenant_id' => null])->save();
 
                 $user->setRelation('currentTenant', null);

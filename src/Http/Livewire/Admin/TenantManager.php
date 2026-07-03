@@ -7,6 +7,8 @@ namespace Laravel\Jetstream\Http\Livewire\Admin;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Jetstream\Contracts\CreatesTenants;
 use Laravel\Jetstream\Contracts\DeletesTenants;
+use Laravel\Jetstream\Events\TenantFrozen;
+use Laravel\Jetstream\Events\TenantUnfrozen;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Tenancy\TenantContext;
 use Livewire\Component;
@@ -111,6 +113,32 @@ class TenantManager extends Component
         $tenant->forceFill([
             'allow_customer_registration' => ! $tenant->allow_customer_registration,
         ])->save();
+    }
+
+    /**
+     * Toggle whether the given tenant is frozen.
+     *
+     * A frozen tenant's staff and customers lose access to the tenant until
+     * it is unfrozen.
+     *
+     * @param  int  $tenantId
+     * @return void
+     */
+    public function toggleTenantFreeze($tenantId)
+    {
+        $tenant = Jetstream::newTenantModel()->findOrFail($tenantId);
+
+        $frozen = $tenant->isFrozen();
+
+        $tenant->forceFill([
+            'frozen_at' => $frozen ? null : now(),
+        ])->save();
+
+        $frozen
+            ? TenantUnfrozen::dispatch($tenant)
+            : TenantFrozen::dispatch($tenant);
+
+        $this->dispatch('saved');
     }
 
     /**

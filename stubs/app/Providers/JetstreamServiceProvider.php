@@ -23,6 +23,7 @@ use App\Actions\Jetstream\UpdateTenantName;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Jetstream\Http\Middleware\EnsureCustomerAccountContext;
 use Laravel\Jetstream\Http\Middleware\EnsureTenantContext;
+use Laravel\Jetstream\Http\Middleware\EnsureUserIsNotBlocked;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Livewire;
 
@@ -64,6 +65,7 @@ class JetstreamServiceProvider extends ServiceProvider
 
         // Keep tenant and customer context resolved across Livewire component updates.
         Livewire::addPersistentMiddleware([
+            EnsureUserIsNotBlocked::class,
             EnsureTenantContext::class,
             EnsureCustomerAccountContext::class,
         ]);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
+use Illuminate\Support\Facades\Gate;
 use Laravel\Jetstream\Actions\UpdateTenantStaffRole;
 use Laravel\Jetstream\Contracts\AddsTenantStaff;
 use Laravel\Jetstream\Contracts\RemovesTenantStaff;
@@ -176,6 +177,38 @@ class TenantStaffManager extends Component
         $this->tenant->refresh();
 
         return redirect(Jetstream::homePath());
+    }
+
+    /**
+     * Toggle whether the given staff member's membership is frozen.
+     *
+     * Frozen staff members remain on the tenant but lose all access to it
+     * until unfrozen. Owners cannot be frozen.
+     *
+     * @param  int  $userId
+     * @return void
+     */
+    public function toggleStaffFreeze($userId)
+    {
+        Gate::forUser($this->user)->authorize('updateTenantStaff', $this->tenant);
+
+        $staff = Jetstream::findUserByIdOrFail($userId);
+
+        abort_if($staff->ownsTenant($this->tenant), 403);
+
+        $frozen = $staff->tenantMembershipIsFrozen($this->tenant);
+
+        $this->tenant->users()->updateExistingPivot($staff->id, [
+            'frozen_at' => $frozen ? null : now(),
+        ]);
+
+        if (! $frozen && $staff->getAttribute('current_tenant_id') === $this->tenant->id) {
+            $staff->forceFill(['current_tenant_id' => null])->save();
+        }
+
+        $this->tenant->refresh();
+
+        $this->dispatch('saved');
     }
 
     /**

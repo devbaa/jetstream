@@ -52,7 +52,8 @@ class AccountRecoveryTest extends OrchestraTestCase
         $this->actingAs($user);
 
         Livewire::test(UpdateRecoveryChannelsForm::class)
-            ->set('state.phone', '+90 555 000 00 00')
+            ->set('state.phone_country', 'TR')
+            ->set('state.phone', '555 000 00 00')
             ->set('state.recovery_email', 'backup@laravel.com')
             ->call('updateRecoveryChannels')
             ->assertHasNoErrors()
@@ -60,7 +61,9 @@ class AccountRecoveryTest extends OrchestraTestCase
 
         $user->refresh();
 
-        $this->assertSame('+90 555 000 00 00', $user->phone);
+        $this->assertSame('+905550000000', $user->phone);
+        $this->assertSame('TR', $user->phone_country);
+        $this->assertNull($user->phone_verified_at);
         $this->assertSame('backup@laravel.com', $user->recovery_email);
         $this->assertNull($user->recovery_email_verified_at);
 
@@ -76,9 +79,22 @@ class AccountRecoveryTest extends OrchestraTestCase
         $this->actingAs($user);
 
         Livewire::test(UpdateRecoveryChannelsForm::class)
+            ->set('state.phone_country', 'TR')
             ->set('state.phone', 'not-a-phone')
             ->call('updateRecoveryChannels')
             ->assertHasErrors('phone');
+    }
+
+    public function test_a_phone_number_requires_a_country(): void
+    {
+        $user = $this->createUser();
+
+        $this->actingAs($user);
+
+        Livewire::test(UpdateRecoveryChannelsForm::class)
+            ->set('state.phone', '555 000 00 00')
+            ->call('updateRecoveryChannels')
+            ->assertHasErrors('phone_country');
     }
 
     public function test_the_recovery_email_must_differ_from_the_primary_email(): void

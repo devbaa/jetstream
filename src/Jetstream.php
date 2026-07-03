@@ -965,6 +965,28 @@ class Jetstream
     }
 
     /**
+     * Register a class / callback that should be used to send phone verification codes.
+     *
+     * @param  string  $class
+     * @return void
+     */
+    public static function verifyPhonesUsing(string $class)
+    {
+        app()->singleton(Contracts\SendsPhoneVerifications::class, $class);
+    }
+
+    /**
+     * Determine if a phone verification service has been registered.
+     *
+     * When no service is registered, users may enter a phone number but it
+     * cannot be verified.
+     */
+    public static function phoneVerificationEnabled(): bool
+    {
+        return app()->bound(Contracts\SendsPhoneVerifications::class);
+    }
+
+    /**
      * Find the path to a localized Markdown resource.
      *
      * @param  string  $name

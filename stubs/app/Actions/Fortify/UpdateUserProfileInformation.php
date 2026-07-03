@@ -21,6 +21,8 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
     {
         Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'photo' => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
         ])->validateWithBag('updateProfileInformation');
@@ -35,6 +37,8 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
         } else {
             $user->forceFill([
                 'name' => $input['name'],
+                'middle_name' => $this->optionalName($input, 'middle_name'),
+                'last_name' => $this->optionalName($input, 'last_name'),
                 'email' => $input['email'],
             ])->save();
         }
@@ -49,10 +53,24 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
     {
         $user->forceFill([
             'name' => $input['name'],
+            'middle_name' => $this->optionalName($input, 'middle_name'),
+            'last_name' => $this->optionalName($input, 'last_name'),
             'email' => $input['email'],
             'email_verified_at' => null,
         ])->save();
 
         $user->sendEmailVerificationNotification();
+    }
+
+    /**
+     * Get an optional name part from the input, normalizing blanks to null.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    protected function optionalName(array $input, string $key): ?string
+    {
+        $value = $input[$key] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
 }

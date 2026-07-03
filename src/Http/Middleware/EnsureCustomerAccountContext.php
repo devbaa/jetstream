@@ -30,7 +30,7 @@ class EnsureCustomerAccountContext
 
         $account = $user->currentCustomerAccount;
 
-        if ($account && ! $user->belongsToCustomerAccount($account)) {
+        if ($account && ! $user->hasActiveCustomerAccountAccess($account)) {
             $user->forceFill(['current_customer_account_id' => null])->save();
 
             $user->setRelation('currentCustomerAccount', null);
@@ -64,7 +64,9 @@ class EnsureCustomerAccountContext
      */
     protected function onlyAccountOf($user)
     {
-        $accounts = $user->allCustomerAccounts();
+        $accounts = $user->allCustomerAccounts()->filter(function ($account) use ($user) {
+            return $user->hasActiveCustomerAccountAccess($account);
+        });
 
         return $accounts->count() === 1 ? $accounts->first() : null;
     }

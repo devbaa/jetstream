@@ -25,9 +25,19 @@
                     </div>
 
                     <div class="flex items-center">
+                        @if ($tenant->isFrozen())
+                            <span class="ms-6 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ __('Frozen') }}</span>
+                        @endif
+
                         <button class="cursor-pointer ms-6 text-sm {{ $tenant->allow_customer_registration ? 'text-green-500' : 'text-gray-400' }} underline focus:outline-none"
                                 wire:click="toggleCustomerRegistration({{ $tenant->id }})">
                             {{ $tenant->allow_customer_registration ? __('Self-registration on') : __('Self-registration off') }}
+                        </button>
+
+                        <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
+                                wire:click="toggleTenantFreeze({{ $tenant->id }})"
+                                wire:confirm="{{ $tenant->isFrozen() ? __('Unfreeze this tenant?') : __('Freeze this tenant? Its staff and customers will lose access.') }}">
+                            {{ $tenant->isFrozen() ? __('Unfreeze') : __('Freeze') }}
                         </button>
 
                         <button class="cursor-pointer ms-6 text-sm text-red-500 focus:outline-none"

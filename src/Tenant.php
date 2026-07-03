@@ -13,11 +13,23 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $name
  * @property string $slug
  * @property bool $allow_customer_registration
+ * @property \Illuminate\Support\Carbon|string|null $frozen_at
  * @property \Illuminate\Support\Carbon|null $deleted_at
  */
 abstract class Tenant extends Model
 {
     use SoftDeletes;
+
+    /**
+     * Determine if the tenant is frozen.
+     *
+     * A frozen tenant's staff and customers lose access to the tenant until
+     * a system administrator unfreezes it.
+     */
+    public function isFrozen(): bool
+    {
+        return $this->frozen_at !== null;
+    }
 
     /**
      * Get the owner of the tenant.
@@ -47,7 +59,7 @@ abstract class Tenant extends Model
     public function users()
     {
         return $this->belongsToMany(Jetstream::userModel(), Jetstream::tenantMembershipModel())
-                        ->withPivot('role')
+                        ->withPivot('role', 'frozen_at')
                         ->withTimestamps()
                         ->as('membership');
     }

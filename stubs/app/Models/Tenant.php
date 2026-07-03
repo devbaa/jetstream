@@ -50,6 +50,7 @@ class Tenant extends JetstreamTenant
     {
         return [
             'allow_customer_registration' => 'boolean',
+            'frozen_at' => 'datetime',
         ];
     }
 }

@@ -40,7 +40,7 @@ trait HasTenants
      */
     public function switchTenant($tenant)
     {
-        if (! $this->belongsToTenant($tenant)) {
+        if (! $this->hasActiveTenantAccess($tenant)) {
             return false;
         }
 
@@ -93,7 +93,7 @@ trait HasTenants
     public function tenants()
     {
         return $this->belongsToMany(Jetstream::tenantModel(), Jetstream::tenantMembershipModel())
-                        ->withPivot('role')
+                        ->withPivot('role', 'frozen_at')
                         ->withTimestamps()
                         ->as('membership');
     }
@@ -128,6 +128,45 @@ trait HasTenants
         return $this->ownsTenant($tenant) || $this->tenants->contains(function ($t) use ($tenant) {
             return $t->id === $tenant->id;
         });
+    }
+
+    /**
+     * Determine if the user's membership on the given tenant is frozen.
+     *
+     * Tenant owners cannot be frozen at the membership level; freezing the
+     * entire tenant blocks the owner as well.
+     *
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
+     * @return bool
+     */
+    public function tenantMembershipIsFrozen($tenant)
+    {
+        if (is_null($tenant) || $this->ownsTenant($tenant)) {
+            return false;
+        }
+
+        $membership = $this->tenants->first(function ($t) use ($tenant) {
+            return $t->id === $tenant->id;
+        })?->membership;
+
+        return $membership !== null && $membership->getAttribute('frozen_at') !== null;
+    }
+
+    /**
+     * Determine if the user currently has usable access to the given tenant.
+     *
+     * Access requires membership (or ownership), an unfrozen tenant, and an
+     * unfrozen membership.
+     *
+     * @param  \Laravel\Jetstream\Tenant|null  $tenant
+     * @return bool
+     */
+    public function hasActiveTenantAccess($tenant)
+    {
+        return $this->belongsToTenant($tenant) &&
+               $tenant !== null &&
+               ! $tenant->isFrozen() &&
+               ! $this->tenantMembershipIsFrozen($tenant);
     }
 
     /**
@@ -200,6 +239,10 @@ trait HasTenants
      */
     public function hasTenantPermission($tenant, string $permission)
     {
+        if ($tenant !== null && ($tenant->isFrozen() || $this->tenantMembershipIsFrozen($tenant))) {
+            return false;
+        }
+
         if ($this->ownsTenant($tenant)) {
             return true;
         }

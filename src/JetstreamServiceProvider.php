@@ -15,6 +15,7 @@ use Laravel\Fortify\Features as FortifyFeatures;
 use Laravel\Fortify\Fortify;
 use Laravel\Jetstream\Audit\AuthenticationEventSubscriber;
 use Laravel\Jetstream\Http\Livewire\Admin\TenantManager as AdminTenantManager;
+use Laravel\Jetstream\Http\Livewire\Admin\UserManager as AdminUserManager;
 use Laravel\Jetstream\Http\Livewire\ApiTokenManager;
 use Laravel\Jetstream\Http\Livewire\AuditLogViewer;
 use Laravel\Jetstream\Http\Livewire\CreateTeamForm;
@@ -40,6 +41,7 @@ use Laravel\Jetstream\Http\Livewire\UpdateTeamNameForm;
 use Laravel\Jetstream\Http\Livewire\UpdateTenantNameForm;
 use Laravel\Jetstream\Http\Middleware\EnsureCustomerAccountContext;
 use Laravel\Jetstream\Http\Middleware\EnsureTenantContext;
+use Laravel\Jetstream\Http\Middleware\EnsureUserIsNotBlocked;
 use Laravel\Jetstream\Http\Middleware\EnsureUserIsSystemAdmin;
 use Laravel\Jetstream\Tenancy\CustomerContext;
 use Laravel\Jetstream\Tenancy\TenantContext;
@@ -142,6 +144,7 @@ class JetstreamServiceProvider extends ServiceProvider
                 Livewire::component('tenants.delete-tenant-form', DeleteTenantForm::class);
                 Livewire::component('customers.customer-account-manager', CustomerAccountManager::class);
                 Livewire::component('admin.tenant-manager', AdminTenantManager::class);
+                Livewire::component('admin.user-manager', AdminUserManager::class);
             }
 
             if (Features::hasCustomerPortalFeatures()) {
@@ -209,6 +212,8 @@ class JetstreamServiceProvider extends ServiceProvider
      */
     protected function configureTenancy()
     {
+        Route::aliasMiddleware('account.active', EnsureUserIsNotBlocked::class);
+
         if (! Features::hasTenantFeatures()) {
             return;
         }
@@ -258,6 +263,9 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2026_07_03_810000_create_data_requests_table.php' => database_path('migrations/2026_07_03_810000_create_data_requests_table.php'),
             __DIR__.'/../database/migrations/2026_07_03_820000_add_soft_delete_columns.php' => database_path('migrations/2026_07_03_820000_add_soft_delete_columns.php'),
             __DIR__.'/../database/migrations/2026_07_03_830000_add_account_recovery_columns.php' => database_path('migrations/2026_07_03_830000_add_account_recovery_columns.php'),
+            __DIR__.'/../database/migrations/2026_07_03_840000_add_blocking_and_freezing_columns.php' => database_path('migrations/2026_07_03_840000_add_blocking_and_freezing_columns.php'),
+            __DIR__.'/../database/migrations/2026_07_03_850000_add_name_columns.php' => database_path('migrations/2026_07_03_850000_add_name_columns.php'),
+            __DIR__.'/../database/migrations/2026_07_03_860000_add_phone_verification_columns.php' => database_path('migrations/2026_07_03_860000_add_phone_verification_columns.php'),
         ], 'jetstream-compliance-migrations');
 
         $this->publishes([

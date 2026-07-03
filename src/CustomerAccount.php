@@ -13,12 +13,24 @@ use Laravel\Jetstream\Tenancy\BelongsToTenant;
  * @property int $tenant_id
  * @property int $user_id
  * @property string $name
+ * @property \Illuminate\Support\Carbon|string|null $frozen_at
  * @property \Illuminate\Support\Carbon|null $deleted_at
  */
 abstract class CustomerAccount extends Model
 {
     use BelongsToTenant;
     use SoftDeletes;
+
+    /**
+     * Determine if the customer account is frozen.
+     *
+     * A frozen account's members lose access to the customer portal for the
+     * account until tenant staff unfreeze it.
+     */
+    public function isFrozen(): bool
+    {
+        return $this->frozen_at !== null;
+    }
 
     /**
      * Get the owner of the customer account.

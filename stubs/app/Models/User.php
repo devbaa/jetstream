@@ -23,8 +23,14 @@ use Laravel\Sanctum\HasApiTokens;
 /**
  * @property int $id
  * @property string $name
+ * @property string|null $middle_name
+ * @property string|null $last_name
  * @property string $email
  * @property string|null $phone
+ * @property string|null $phone_country
+ * @property \Illuminate\Support\Carbon|null $phone_verified_at
+ * @property string|null $phone_verification_code
+ * @property \Illuminate\Support\Carbon|null $phone_verification_expires_at
  * @property string|null $recovery_email
  * @property \Illuminate\Support\Carbon|null $recovery_email_verified_at
  * @property string $password
@@ -34,6 +40,8 @@ use Laravel\Sanctum\HasApiTokens;
  * @property int|null $current_tenant_id
  * @property int|null $current_customer_account_id
  * @property bool $is_system_admin
+ * @property \Illuminate\Support\Carbon|null $blocked_at
+ * @property string|null $blocked_reason
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property \Illuminate\Support\Carbon|null $two_factor_confirmed_at
@@ -63,6 +71,8 @@ class User extends Authenticatable implements PasskeyUser
      */
     protected $fillable = [
         'name',
+        'middle_name',
+        'last_name',
         'email',
         'password',
     ];
@@ -75,6 +85,7 @@ class User extends Authenticatable implements PasskeyUser
     protected $hidden = [
         'password',
         'remember_token',
+        'phone_verification_code',
         'two_factor_recovery_codes',
         'two_factor_secret',
     ];
@@ -98,8 +109,34 @@ class User extends Authenticatable implements PasskeyUser
         return [
             'email_verified_at' => 'datetime',
             'recovery_email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'phone_verification_expires_at' => 'datetime',
+            'blocked_at' => 'datetime',
             'password' => 'hashed',
             'is_system_admin' => 'boolean',
         ];
+    }
+
+    /**
+     * Get the user's full name.
+     *
+     * The "name" attribute remains the general-purpose display name; this
+     * composes it with the optional middle and last names.
+     */
+    public function fullName(): string
+    {
+        return trim(implode(' ', array_filter([
+            $this->name,
+            $this->middle_name,
+            $this->last_name,
+        ], fn (?string $part): bool => $part !== null && $part !== '')));
+    }
+
+    /**
+     * Determine if the user is blocked from the entire application.
+     */
+    public function isBlocked(): bool
+    {
+        return $this->blocked_at !== null;
     }
 }
