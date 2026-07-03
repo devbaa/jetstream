@@ -69,6 +69,36 @@ class Features
     }
 
     /**
+     * Determine if the application is using any tenant features.
+     *
+     * @return bool
+     */
+    public static function hasTenantFeatures()
+    {
+        return static::enabled(static::tenants());
+    }
+
+    /**
+     * Determine if the application is serving a customer portal.
+     *
+     * @return bool
+     */
+    public static function hasCustomerPortalFeatures()
+    {
+        return static::optionEnabled(static::tenants(), 'portal');
+    }
+
+    /**
+     * Determine if tenants may allow customers to self-register.
+     *
+     * @return bool
+     */
+    public static function allowsCustomerRegistration()
+    {
+        return static::optionEnabled(static::tenants(), 'customer-registration');
+    }
+
+    /**
      * Determine if the application has terms of service / privacy policy confirmation enabled.
      *
      * @return bool
@@ -121,6 +151,21 @@ class Features
         }
 
         return 'teams';
+    }
+
+    /**
+     * Enable the multi-tenant SaaS feature.
+     *
+     * @param  array  $options
+     * @return string
+     */
+    public static function tenants(array $options = [])
+    {
+        if (! empty($options)) {
+            config(['jetstream-options.tenants' => $options]);
+        }
+
+        return 'tenants';
     }
 
     /**

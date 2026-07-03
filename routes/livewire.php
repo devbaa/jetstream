@@ -1,10 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Laravel\Jetstream\Http\Controllers\CurrentCustomerAccountController;
 use Laravel\Jetstream\Http\Controllers\CurrentTeamController;
+use Laravel\Jetstream\Http\Controllers\CurrentTenantController;
+use Laravel\Jetstream\Http\Controllers\CustomerInvitationController;
+use Laravel\Jetstream\Http\Controllers\Livewire\AdminTenantController;
 use Laravel\Jetstream\Http\Controllers\Livewire\ApiTokenController;
+use Laravel\Jetstream\Http\Controllers\Livewire\CustomerRegistrationController;
+use Laravel\Jetstream\Http\Controllers\Livewire\PortalController;
 use Laravel\Jetstream\Http\Controllers\Livewire\PrivacyPolicyController;
 use Laravel\Jetstream\Http\Controllers\Livewire\TeamController;
+use Laravel\Jetstream\Http\Controllers\Livewire\TenantController;
+use Laravel\Jetstream\Http\Controllers\Livewire\TenantCustomerController;
 use Laravel\Jetstream\Http\Controllers\Livewire\TermsOfServiceController;
 use Laravel\Jetstream\Http\Controllers\Livewire\UserProfileController;
 use Laravel\Jetstream\Http\Controllers\TeamInvitationController;
@@ -36,14 +44,56 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
 
             // Teams...
             if (Jetstream::hasTeamFeatures()) {
-                Route::get('/teams/create', [TeamController::class, 'create'])->name('teams.create');
-                Route::get('/teams/{team}', [TeamController::class, 'show'])->name('teams.show');
-                Route::put('/current-team', [CurrentTeamController::class, 'update'])->name('current-team.update');
+                Route::group(['middleware' => Jetstream::hasTenantFeatures() ? ['tenant.context'] : []], function () {
+                    Route::get('/teams/create', [TeamController::class, 'create'])->name('teams.create');
+                    Route::get('/teams/{team}', [TeamController::class, 'show'])->name('teams.show');
+                    Route::put('/current-team', [CurrentTeamController::class, 'update'])->name('current-team.update');
+                });
 
                 Route::get('/team-invitations/{invitation}', [TeamInvitationController::class, 'accept'])
                     ->middleware(['signed'])
                     ->name('team-invitations.accept');
             }
+
+            // Tenants...
+            if (Jetstream::hasTenantFeatures()) {
+                Route::group(['middleware' => ['tenant.context']], function () {
+                    Route::get('/tenants/create', [TenantController::class, 'create'])->name('tenants.create');
+                    Route::get('/tenants/{tenant}', [TenantController::class, 'show'])->name('tenants.show');
+                    Route::put('/current-tenant', [CurrentTenantController::class, 'update'])->name('current-tenant.update');
+
+                    Route::get('/tenants/{tenant}/customers', [TenantCustomerController::class, 'index'])->name('tenant-customers.index');
+                });
+
+                // System Administration...
+                Route::group(['middleware' => ['system.admin']], function () {
+                    Route::get('/admin/tenants', [AdminTenantController::class, 'index'])->name('admin.tenants.index');
+                });
+
+                // Customer Portal...
+                if (Jetstream::hasCustomerPortalFeatures()) {
+                    Route::group(['middleware' => ['customer.context']], function () {
+                        Route::get('/portal', [PortalController::class, 'show'])->name('portal.show');
+                        Route::get('/portal/account', [PortalController::class, 'account'])->name('portal.account.show');
+                        Route::put('/portal/current-account', [CurrentCustomerAccountController::class, 'update'])->name('current-customer-account.update');
+                    });
+
+                    Route::get('/customer-invitations/{invitation}', [CustomerInvitationController::class, 'accept'])
+                        ->middleware(['signed'])
+                        ->name('customer-invitations.accept');
+
+                    Route::delete('/customer-invitations/{invitation}', [CustomerInvitationController::class, 'destroy'])
+                        ->name('customer-invitations.destroy');
+                }
+            }
         });
     });
+
+    // Customer Self-Registration...
+    if (Jetstream::hasTenantFeatures() && Jetstream::hasCustomerPortalFeatures()) {
+        Route::group(['middleware' => ['throttle:6,1']], function () {
+            Route::get('/portal/register/{slug}', [CustomerRegistrationController::class, 'show'])->name('portal.register');
+            Route::post('/portal/register/{slug}', [CustomerRegistrationController::class, 'store'])->name('portal.register.store');
+        });
+    }
 });

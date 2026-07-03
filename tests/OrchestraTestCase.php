@@ -24,4 +24,17 @@ abstract class OrchestraTestCase extends TestCase
 
         $app->config->set('jetstream.features', $features);
     }
+
+    protected function defineHasTenantEnvironment($app, bool $portal = true)
+    {
+        $this->defineHasTeamEnvironment($app);
+
+        $features = $app->config->get('jetstream.features', []);
+
+        $features[] = $portal
+            ? Features::tenants(['portal' => true, 'customer-registration' => true])
+            : Features::tenants();
+
+        $app->config->set('jetstream.features', $features);
+    }
 }

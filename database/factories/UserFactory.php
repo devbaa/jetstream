@@ -50,6 +50,16 @@ class UserFactory extends Factory
     }
 
     /**
+     * Indicate that the user is a system administrator.
+     */
+    public function systemAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_system_admin' => true,
+        ]);
+    }
+
+    /**
      * Indicate that the user should have a personal team.
      */
     public function withPersonalTeam(?callable $callback = null): static

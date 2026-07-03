@@ -14,18 +14,32 @@ use Illuminate\View\Compilers\BladeCompiler;
 use Inertia\Inertia;
 use Laravel\Fortify\Events\PasswordUpdatedViaController;
 use Laravel\Fortify\Fortify;
+use Laravel\Jetstream\Http\Livewire\Admin\TenantManager as AdminTenantManager;
 use Laravel\Jetstream\Http\Livewire\ApiTokenManager;
 use Laravel\Jetstream\Http\Livewire\CreateTeamForm;
+use Laravel\Jetstream\Http\Livewire\CreateTenantForm;
+use Laravel\Jetstream\Http\Livewire\CustomerAccountManager;
 use Laravel\Jetstream\Http\Livewire\DeleteTeamForm;
+use Laravel\Jetstream\Http\Livewire\DeleteTenantForm;
 use Laravel\Jetstream\Http\Livewire\DeleteUserForm;
 use Laravel\Jetstream\Http\Livewire\LogoutOtherBrowserSessionsForm;
 use Laravel\Jetstream\Http\Livewire\NavigationMenu;
+use Laravel\Jetstream\Http\Livewire\Portal\AccountMemberManager;
+use Laravel\Jetstream\Http\Livewire\Portal\UpdateAccountNameForm;
+use Laravel\Jetstream\Http\Livewire\RoleManager;
 use Laravel\Jetstream\Http\Livewire\TeamMemberManager;
+use Laravel\Jetstream\Http\Livewire\TenantStaffManager;
 use Laravel\Jetstream\Http\Livewire\TwoFactorAuthenticationForm;
 use Laravel\Jetstream\Http\Livewire\UpdatePasswordForm;
 use Laravel\Jetstream\Http\Livewire\UpdateProfileInformationForm;
 use Laravel\Jetstream\Http\Livewire\UpdateTeamNameForm;
+use Laravel\Jetstream\Http\Livewire\UpdateTenantNameForm;
+use Laravel\Jetstream\Http\Middleware\EnsureCustomerAccountContext;
+use Laravel\Jetstream\Http\Middleware\EnsureTenantContext;
+use Laravel\Jetstream\Http\Middleware\EnsureUserIsSystemAdmin;
 use Laravel\Jetstream\Http\Middleware\ShareInertiaData;
+use Laravel\Jetstream\Tenancy\CustomerContext;
+use Laravel\Jetstream\Tenancy\TenantContext;
 use Livewire\Livewire;
 
 class JetstreamServiceProvider extends ServiceProvider
@@ -38,6 +52,10 @@ class JetstreamServiceProvider extends ServiceProvider
     public function register()
     {
         $this->mergeConfigFrom(__DIR__.'/../config/jetstream.php', 'jetstream');
+
+        $this->app->scoped(TenantContext::class);
+        $this->app->scoped(CustomerContext::class);
+        $this->app->scoped(RoleRegistry::class);
     }
 
     /**
@@ -52,6 +70,7 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->configurePublishing();
         $this->configureRoutes();
         $this->configureCommands();
+        $this->configureTenancy();
 
         RedirectResponse::macro('banner', function ($message): RedirectResponse {
             /** @var \Illuminate\Http\RedirectResponse $this */
@@ -99,7 +118,38 @@ class JetstreamServiceProvider extends ServiceProvider
                 Livewire::component('teams.team-member-manager', TeamMemberManager::class);
                 Livewire::component('teams.delete-team-form', DeleteTeamForm::class);
             }
+
+            if (Features::hasTenantFeatures()) {
+                Livewire::component('tenants.create-tenant-form', CreateTenantForm::class);
+                Livewire::component('tenants.update-tenant-name-form', UpdateTenantNameForm::class);
+                Livewire::component('tenants.tenant-staff-manager', TenantStaffManager::class);
+                Livewire::component('tenants.role-manager', RoleManager::class);
+                Livewire::component('tenants.delete-tenant-form', DeleteTenantForm::class);
+                Livewire::component('customers.customer-account-manager', CustomerAccountManager::class);
+                Livewire::component('admin.tenant-manager', AdminTenantManager::class);
+            }
+
+            if (Features::hasCustomerPortalFeatures()) {
+                Livewire::component('portal.update-account-name-form', UpdateAccountNameForm::class);
+                Livewire::component('portal.account-member-manager', AccountMemberManager::class);
+            }
         }
+    }
+
+    /**
+     * Configure the middleware used to resolve tenant and customer context.
+     *
+     * @return void
+     */
+    protected function configureTenancy()
+    {
+        if (! Features::hasTenantFeatures()) {
+            return;
+        }
+
+        Route::aliasMiddleware('tenant.context', EnsureTenantContext::class);
+        Route::aliasMiddleware('customer.context', EnsureCustomerAccountContext::class);
+        Route::aliasMiddleware('system.admin', EnsureUserIsSystemAdmin::class);
     }
 
     /**
@@ -126,6 +176,16 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2020_05_21_200000_create_team_user_table.php' => database_path('migrations/2020_05_21_200000_create_team_user_table.php'),
             __DIR__.'/../database/migrations/2020_05_21_300000_create_team_invitations_table.php' => database_path('migrations/2020_05_21_300000_create_team_invitations_table.php'),
         ], 'jetstream-team-migrations');
+
+        $this->publishesMigrations([
+            __DIR__.'/../database/migrations/2026_07_03_100000_create_tenants_table.php' => database_path('migrations/2026_07_03_100000_create_tenants_table.php'),
+            __DIR__.'/../database/migrations/2026_07_03_200000_create_tenant_user_table.php' => database_path('migrations/2026_07_03_200000_create_tenant_user_table.php'),
+            __DIR__.'/../database/migrations/2026_07_03_300000_create_roles_table.php' => database_path('migrations/2026_07_03_300000_create_roles_table.php'),
+            __DIR__.'/../database/migrations/2026_07_03_400000_add_tenant_columns.php' => database_path('migrations/2026_07_03_400000_add_tenant_columns.php'),
+            __DIR__.'/../database/migrations/2026_07_03_500000_create_customer_accounts_table.php' => database_path('migrations/2026_07_03_500000_create_customer_accounts_table.php'),
+            __DIR__.'/../database/migrations/2026_07_03_600000_create_customer_account_user_table.php' => database_path('migrations/2026_07_03_600000_create_customer_account_user_table.php'),
+            __DIR__.'/../database/migrations/2026_07_03_700000_create_customer_invitations_table.php' => database_path('migrations/2026_07_03_700000_create_customer_invitations_table.php'),
+        ], 'jetstream-tenant-migrations');
 
         $this->publishes([
             __DIR__.'/../routes/'.config('jetstream.stack').'.php' => base_path('routes/jetstream.php'),

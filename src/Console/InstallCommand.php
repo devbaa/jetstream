@@ -32,6 +32,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
     protected $signature = 'jetstream:install {stack : The development stack that should be installed (inertia,livewire)}
                                               {--dark : Indicate that dark mode support should be installed}
                                               {--teams : Indicates if team support should be installed}
+                                              {--saas : Indicates if multi-tenant SaaS support should be installed (implies teams, livewire only)}
                                               {--api : Indicates if API support should be installed}
                                               {--verification : Indicates if email verification support should be installed}
                                               {--pest : Indicates if Pest should be installed}
@@ -54,6 +55,12 @@ class InstallCommand extends Command implements PromptsForMissingInput
     {
         if (! in_array($this->argument('stack'), ['inertia', 'livewire'])) {
             $this->components->error('Invalid stack. Supported stacks are [inertia] and [livewire].');
+
+            return 1;
+        }
+
+        if ($this->option('saas') && $this->argument('stack') !== 'livewire') {
+            $this->components->error('The --saas option currently supports only the livewire stack.');
 
             return 1;
         }
@@ -257,8 +264,13 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/livewire/UpdatePasswordTest.php', base_path('tests/Feature/UpdatePasswordTest.php'));
 
         // Teams...
-        if ($this->option('teams')) {
+        if ($this->option('teams') || $this->option('saas')) {
             $this->installLivewireTeamStack();
+        }
+
+        // SaaS...
+        if ($this->option('saas')) {
+            $this->installLivewireSaasStack();
         }
 
         if (! $this->option('dark')) {
@@ -312,6 +324,89 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/livewire/UpdateTeamNameTest.php', base_path('tests/Feature/UpdateTeamNameTest.php'));
 
         $this->ensureApplicationIsTeamCompatible();
+    }
+
+    /**
+     * Install the Livewire SaaS stack into the application.
+     *
+     * @return void
+     */
+    protected function installLivewireSaasStack()
+    {
+        // Directories...
+        (new Filesystem)->ensureDirectoryExists(resource_path('views/tenants'));
+        (new Filesystem)->ensureDirectoryExists(resource_path('views/customers'));
+        (new Filesystem)->ensureDirectoryExists(resource_path('views/portal'));
+        (new Filesystem)->ensureDirectoryExists(resource_path('views/admin'));
+
+        // Other Views...
+        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/tenants', resource_path('views/tenants'));
+        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/customers', resource_path('views/customers'));
+        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/portal', resource_path('views/portal'));
+        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/admin', resource_path('views/admin'));
+
+        // Tests...
+        $stubs = $this->getTestStubsPath();
+
+        copy($stubs.'/livewire/CreateTenantTest.php', base_path('tests/Feature/CreateTenantTest.php'));
+        copy($stubs.'/livewire/TenantStaffTest.php', base_path('tests/Feature/TenantStaffTest.php'));
+        copy($stubs.'/livewire/RoleManagementTest.php', base_path('tests/Feature/RoleManagementTest.php'));
+        copy($stubs.'/livewire/CustomerAccountManagementTest.php', base_path('tests/Feature/CustomerAccountManagementTest.php'));
+        copy($stubs.'/livewire/PortalTest.php', base_path('tests/Feature/PortalTest.php'));
+
+        $this->ensureApplicationIsSaasCompatible();
+    }
+
+    /**
+     * Ensure the installed application is ready for multi-tenant SaaS usage.
+     *
+     * This runs after the team installation steps and overwrites the user
+     * model and service provider with their SaaS variants.
+     *
+     * @return void
+     */
+    protected function ensureApplicationIsSaasCompatible()
+    {
+        // Publish Tenant Migrations...
+        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-tenant-migrations', '--force' => true]);
+
+        // Configuration...
+        $this->replaceInFile('// Features::tenants([\'portal\' => true, \'customer-registration\' => true])', 'Features::tenants([\'portal\' => true, \'customer-registration\' => true])', config_path('jetstream.php'));
+
+        // Service Providers...
+        copy(__DIR__.'/../../stubs/app/Providers/JetstreamWithSaasServiceProvider.php', app_path('Providers/JetstreamServiceProvider.php'));
+
+        // Models...
+        copy(__DIR__.'/../../stubs/app/Models/TeamWithTenant.php', app_path('Models/Team.php'));
+        copy(__DIR__.'/../../stubs/app/Models/Tenant.php', app_path('Models/Tenant.php'));
+        copy(__DIR__.'/../../stubs/app/Models/TenantMembership.php', app_path('Models/TenantMembership.php'));
+        copy(__DIR__.'/../../stubs/app/Models/Role.php', app_path('Models/Role.php'));
+        copy(__DIR__.'/../../stubs/app/Models/CustomerAccount.php', app_path('Models/CustomerAccount.php'));
+        copy(__DIR__.'/../../stubs/app/Models/CustomerInvitation.php', app_path('Models/CustomerInvitation.php'));
+        copy(__DIR__.'/../../stubs/app/Models/UserWithSaas.php', app_path('Models/User.php'));
+
+        // Actions...
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/CreateTenant.php', app_path('Actions/Jetstream/CreateTenant.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/UpdateTenantName.php', app_path('Actions/Jetstream/UpdateTenantName.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/AddTenantStaff.php', app_path('Actions/Jetstream/AddTenantStaff.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/RemoveTenantStaff.php', app_path('Actions/Jetstream/RemoveTenantStaff.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/DeleteTenant.php', app_path('Actions/Jetstream/DeleteTenant.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/CreateCustomerAccount.php', app_path('Actions/Jetstream/CreateCustomerAccount.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/InviteCustomer.php', app_path('Actions/Jetstream/InviteCustomer.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/RemoveCustomerAccountMember.php', app_path('Actions/Jetstream/RemoveCustomerAccountMember.php'));
+        copy(__DIR__.'/../../stubs/app/Actions/Jetstream/DeleteCustomerAccount.php', app_path('Actions/Jetstream/DeleteCustomerAccount.php'));
+
+        // Policies...
+        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/app/Policies', app_path('Policies'));
+
+        // Factories...
+        copy(__DIR__.'/../../database/factories/TenantFactory.php', base_path('database/factories/TenantFactory.php'));
+        copy(__DIR__.'/../../database/factories/CustomerAccountFactory.php', base_path('database/factories/CustomerAccountFactory.php'));
+
+        // Seeders...
+        copy(__DIR__.'/../../database/seeders/DatabaseSeederWithSaas.php', base_path('database/seeders/DatabaseSeeder.php'));
+        copy(__DIR__.'/../../database/seeders/DefaultRolesSeeder.php', base_path('database/seeders/DefaultRolesSeeder.php'));
+        copy(__DIR__.'/../../database/seeders/SystemAdminSeeder.php', base_path('database/seeders/SystemAdminSeeder.php'));
     }
 
     /**
@@ -883,6 +978,9 @@ EOF;
             ])->when(
                 $input->getArgument('stack') === 'inertia',
                 fn ($options) => $options->put('ssr', 'Inertia SSR')
+            )->when(
+                $input->getArgument('stack') === 'livewire',
+                fn ($options) => $options->put('saas', 'Multi-tenant SaaS support (implies team support)')
             )->sort()->all(),
         ))->each(fn ($option) => $input->setOption($option, true));
 

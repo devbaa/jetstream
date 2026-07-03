@@ -62,7 +62,23 @@ return [
         // Features::profilePhotos(),
         // Features::api(),
         // Features::teams(['invitations' => true]),
+        // Features::tenants(['portal' => true, 'customer-registration' => true]),
         Features::accountDeletion(),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tenants
+    |--------------------------------------------------------------------------
+    |
+    | When the tenants feature is enabled, this option controls whether any
+    | registered user may create their own tenant. When disabled, tenants
+    | may only be created by system administrators via the admin screen.
+    |
+    */
+
+    'tenants' => [
+        'self_service_creation' => true,
     ],
 
     /*
