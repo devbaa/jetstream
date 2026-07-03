@@ -25,6 +25,9 @@ return new class extends Migration
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('cancelled_at')->nullable();
             $table->timestamps();
+
+            // The jetstream:purge command scans for due requests by status and type.
+            $table->index(['status', 'type']);
         });
     }
 

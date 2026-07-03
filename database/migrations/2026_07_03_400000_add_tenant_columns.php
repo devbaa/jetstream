@@ -14,8 +14,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->uuid('current_tenant_id')->nullable();
-            $table->uuid('current_customer_account_id')->nullable();
+            // Indexed because the purge/reset paths clear these selections in bulk.
+            $table->uuid('current_tenant_id')->nullable()->index();
+            $table->uuid('current_customer_account_id')->nullable()->index();
             $table->boolean('is_system_admin')->default(false);
         });
 

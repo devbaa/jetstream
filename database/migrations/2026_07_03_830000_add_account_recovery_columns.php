@@ -17,6 +17,9 @@ return new class extends Migration
             $table->string('phone', 32)->nullable()->after('email');
             $table->string('recovery_email')->nullable()->after('phone');
             $table->timestamp('recovery_email_verified_at')->nullable()->after('recovery_email');
+
+            // The guest account-recovery endpoint looks users up by this column.
+            $table->index('recovery_email');
         });
     }
 

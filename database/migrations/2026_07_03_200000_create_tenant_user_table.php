@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('tenant_user', function (Blueprint $table) {
             $table->id();
             $table->foreignUuid('tenant_id');
-            $table->foreignUuid('user_id');
+            $table->foreignUuid('user_id')->index();
             $table->string('role')->nullable();
             $table->timestamps();
 

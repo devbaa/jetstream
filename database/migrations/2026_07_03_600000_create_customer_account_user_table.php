@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('customer_account_user', function (Blueprint $table) {
             $table->id();
             $table->foreignUuid('customer_account_id');
-            $table->foreignUuid('user_id');
+            $table->foreignUuid('user_id')->index();
             $table->timestamps();
 
             $table->unique(['customer_account_id', 'user_id']);
