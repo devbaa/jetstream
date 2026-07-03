@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * @property int $id
@@ -12,9 +13,12 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $name
  * @property bool $personal_team
  * @property int|null $tenant_id
+ * @property \Illuminate\Support\Carbon|null $deleted_at
  */
 abstract class Team extends Model
 {
+    use SoftDeletes;
+
     /**
      * Get the owner of the team.
      *
@@ -112,20 +116,30 @@ abstract class Team extends Model
     }
 
     /**
-     * Purge all of the team's resources.
+     * Clear the team from the current team selection of its users.
      *
      * @return void
      */
-    public function purge()
+    public function resetCurrentSelections()
     {
         $this->owner()->where('current_team_id', $this->id)
                 ->update(['current_team_id' => null]);
 
         $this->users()->where('current_team_id', $this->id)
                 ->update(['current_team_id' => null]);
+    }
+
+    /**
+     * Permanently purge all of the team's resources.
+     *
+     * @return void
+     */
+    public function purge()
+    {
+        $this->resetCurrentSelections();
 
         $this->users()->detach();
 
-        $this->delete();
+        $this->forceDelete();
     }
 }

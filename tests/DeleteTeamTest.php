@@ -33,6 +33,16 @@ class DeleteTeamTest extends OrchestraTestCase
 
         $action->delete($team);
 
+        $this->assertTrue($team->fresh()->trashed());
+        $this->assertNull(Team::find($team->id));
+    }
+
+    public function test_purging_a_team_permanently_deletes_it()
+    {
+        $team = $this->createTeam();
+
+        $team->purge();
+
         $this->assertNull($team->fresh());
     }
 

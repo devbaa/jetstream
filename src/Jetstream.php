@@ -119,6 +119,27 @@ class Jetstream
     public static $customerInvitationModel = 'App\\Models\\CustomerInvitation';
 
     /**
+     * The audit log model that should be used by Jetstream.
+     *
+     * @var class-string<\Laravel\Jetstream\AuditLog>
+     */
+    public static $auditLogModel = 'App\\Models\\AuditLog';
+
+    /**
+     * The data request model that should be used by Jetstream.
+     *
+     * @var class-string<\Laravel\Jetstream\DataRequest>
+     */
+    public static $dataRequestModel = 'App\\Models\\DataRequest';
+
+    /**
+     * The callback that determines if the current request may bypass rate limiting.
+     *
+     * @var (\Closure(\Illuminate\Http\Request): bool)|null
+     */
+    public static $bypassesThrottlingUsing = null;
+
+    /**
      * Determine if Jetstream has registered roles.
      *
      * @return bool
@@ -311,6 +332,26 @@ class Jetstream
     public static function hasAccountDeletionFeatures()
     {
         return Features::hasAccountDeletionFeatures();
+    }
+
+    /**
+     * Determine if the application lets users exercise their data rights.
+     *
+     * @return bool
+     */
+    public static function hasDataPrivacyFeatures()
+    {
+        return Features::hasDataPrivacyFeatures();
+    }
+
+    /**
+     * Determine if the application supports account recovery channels.
+     *
+     * @return bool
+     */
+    public static function hasAccountRecoveryFeatures()
+    {
+        return Features::hasAccountRecoveryFeatures();
     }
 
     /**
@@ -634,6 +675,117 @@ class Jetstream
         static::$customerInvitationModel = $model;
 
         return new static;
+    }
+
+    /**
+     * Get the name of the audit log model used by the application.
+     *
+     * @return class-string<\Laravel\Jetstream\AuditLog>
+     */
+    public static function auditLogModel()
+    {
+        return static::$auditLogModel;
+    }
+
+    /**
+     * Get a new instance of the audit log model.
+     *
+     * @return \Laravel\Jetstream\AuditLog
+     */
+    public static function newAuditLogModel()
+    {
+        $model = static::auditLogModel();
+
+        return new $model;
+    }
+
+    /**
+     * Specify the audit log model that should be used by Jetstream.
+     *
+     * @param  class-string<\Laravel\Jetstream\AuditLog>  $model
+     * @return static
+     */
+    public static function useAuditLogModel(string $model)
+    {
+        static::$auditLogModel = $model;
+
+        return new static;
+    }
+
+    /**
+     * Get the name of the data request model used by the application.
+     *
+     * @return class-string<\Laravel\Jetstream\DataRequest>
+     */
+    public static function dataRequestModel()
+    {
+        return static::$dataRequestModel;
+    }
+
+    /**
+     * Get a new instance of the data request model.
+     *
+     * @return \Laravel\Jetstream\DataRequest
+     */
+    public static function newDataRequestModel()
+    {
+        $model = static::dataRequestModel();
+
+        return new $model;
+    }
+
+    /**
+     * Specify the data request model that should be used by Jetstream.
+     *
+     * @param  class-string<\Laravel\Jetstream\DataRequest>  $model
+     * @return static
+     */
+    public static function useDataRequestModel(string $model)
+    {
+        static::$dataRequestModel = $model;
+
+        return new static;
+    }
+
+    /**
+     * Register a callback that determines if a request may bypass Jetstream's rate limiting.
+     *
+     * @param  \Closure(\Illuminate\Http\Request): bool  $callback
+     * @return static
+     */
+    public static function bypassThrottlingUsing(\Closure $callback)
+    {
+        static::$bypassesThrottlingUsing = $callback;
+
+        return new static;
+    }
+
+    /**
+     * Determine if the given request may bypass Jetstream's rate limiting.
+     *
+     * System administrators, IP addresses listed in the "jetstream.throttle.bypass_ips"
+     * configuration option, and requests approved by the "bypassThrottlingUsing"
+     * callback are never throttled.
+     */
+    public static function bypassesThrottling(\Illuminate\Http\Request $request): bool
+    {
+        $user = $request->user();
+
+        if ($user instanceof \App\Models\User && $user->isSystemAdmin()) {
+            return true;
+        }
+
+        $bypassIps = config('jetstream.throttle.bypass_ips', []);
+
+        if (is_array($bypassIps) && in_array($request->ip(), $bypassIps, true)) {
+            return true;
+        }
+
+        if (static::$bypassesThrottlingUsing !== null) {
+            return (static::$bypassesThrottlingUsing)($request) === true;
+        }
+
+        return false;
     }
 
     /**

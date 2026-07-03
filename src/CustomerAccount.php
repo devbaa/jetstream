@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Jetstream\Tenancy\BelongsToTenant;
 
 /**
@@ -12,10 +13,12 @@ use Laravel\Jetstream\Tenancy\BelongsToTenant;
  * @property int $tenant_id
  * @property int $user_id
  * @property string $name
+ * @property \Illuminate\Support\Carbon|null $deleted_at
  */
 abstract class CustomerAccount extends Model
 {
     use BelongsToTenant;
+    use SoftDeletes;
 
     /**
      * Get the owner of the customer account.
@@ -100,22 +103,32 @@ abstract class CustomerAccount extends Model
     }
 
     /**
-     * Purge all of the customer account's resources.
+     * Clear the account from the current account selection of its users.
      *
      * @return void
      */
-    public function purge()
+    public function resetCurrentSelections()
     {
         $this->owner()->where('current_customer_account_id', $this->id)
                 ->update(['current_customer_account_id' => null]);
 
         $this->users()->where('current_customer_account_id', $this->id)
                 ->update(['current_customer_account_id' => null]);
+    }
+
+    /**
+     * Permanently purge all of the customer account's resources.
+     *
+     * @return void
+     */
+    public function purge()
+    {
+        $this->resetCurrentSelections();
 
         $this->users()->detach();
 
         $this->customerInvitations()->delete();
 
-        $this->delete();
+        $this->forceDelete();
     }
 }

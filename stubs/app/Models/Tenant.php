@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Database\Factories\TenantFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Laravel\Jetstream\Audit\Auditable;
 use Laravel\Jetstream\Events\TenantCreated;
 use Laravel\Jetstream\Events\TenantDeleted;
 use Laravel\Jetstream\Events\TenantUpdated;
@@ -13,6 +14,8 @@ use Laravel\Jetstream\Tenant as JetstreamTenant;
 
 class Tenant extends JetstreamTenant
 {
+    use Auditable;
+
     /** @use HasFactory<TenantFactory> */
     use HasFactory;
 

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Laravel\Jetstream\Audit\Auditable;
 use Laravel\Jetstream\Events\TeamCreated;
 use Laravel\Jetstream\Events\TeamDeleted;
 use Laravel\Jetstream\Events\TeamUpdated;
@@ -15,6 +16,8 @@ use Laravel\Jetstream\Tenancy\TenantContext;
 
 class Team extends JetstreamTeam
 {
+    use Auditable;
+
     /** @use HasFactory<TeamFactory> */
     use HasFactory;
 

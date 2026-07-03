@@ -16,6 +16,14 @@ Single-database tenancy is enforced by a request-scoped `TenantContext`, a `Belo
 
 Passkey authentication (Laravel Fortify) is wired into the UI: profile passkey management and a "Sign in with a passkey" login flow via the [`@laravel/passkeys`](https://www.npmjs.com/package/@laravel/passkeys) browser client.
 
+## Compliance & operations
+
+- **Universal audit log** — drop the `Laravel\Jetstream\Audit\Auditable` trait onto *any* Eloquent model to record a full change log (created / updated / deleted / restored / force deleted) with the acting user, tenant, IP address, and user agent. Hidden attributes are never recorded. Authentication activity (logins, logouts, failed attempts, password resets, registrations) is logged automatically. An `audit-log-viewer` Livewire component powers a per-tenant change log on the tenant settings screen and an application-wide `/admin/audit` screen for system administrators.
+- **Soft deletes + purge command** — deleting a user, tenant, team, or customer account only soft deletes it. `php artisan jetstream:purge` permanently erases records past the configured retention (`jetstream.purge.retention_days`, default 30), processes due data deletion requests, and prunes expired audit logs. Schedule it daily: `Schedule::command('jetstream:purge')->daily()`. Purging a user erases everything they own, scrubs their audit trail, and anonymizes log entries they authored.
+- **Data rights (GDPR / CCPA / KVKK)** — a "Data & Privacy" profile section lets users download their personal data as JSON and file an account deletion request with a cancellable grace period (`jetstream.privacy.grace_period_days`, default 30). Requests are tracked in a `data_requests` table with IP/user-agent provenance and dispatch `DataRequestCreated` / `DataRequestCompleted` / `DataRequestCancelled` events.
+- **Throttling with bypass** — all Jetstream routes run behind named rate limiters (`jetstream` per user, `jetstream-guest` per IP) configured via `jetstream.throttle`. System administrators, IPs in `throttle.bypass_ips`, and requests approved by a `Jetstream::bypassThrottlingUsing(fn ($request) => ...)` callback are never throttled.
+- **Account recovery** — users may store a phone number and a secondary recovery email. The recovery email is verified through a signed link, after which the guest `/account-recovery` flow can send password reset links to it — useful when the primary inbox is lost. (SMS delivery for the phone channel is intentionally left to your provider of choice.)
+
 ## Installation
 
 ```bash

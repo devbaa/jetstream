@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Fortify\Features as FortifyFeatures;
 use Laravel\Fortify\Fortify;
+use Laravel\Jetstream\Audit\AuthenticationEventSubscriber;
 use Laravel\Jetstream\Http\Livewire\Admin\TenantManager as AdminTenantManager;
 use Laravel\Jetstream\Http\Livewire\ApiTokenManager;
+use Laravel\Jetstream\Http\Livewire\AuditLogViewer;
 use Laravel\Jetstream\Http\Livewire\CreateTeamForm;
 use Laravel\Jetstream\Http\Livewire\CreateTenantForm;
 use Laravel\Jetstream\Http\Livewire\CustomerAccountManager;
+use Laravel\Jetstream\Http\Livewire\DataPrivacyForm;
 use Laravel\Jetstream\Http\Livewire\DeleteTeamForm;
 use Laravel\Jetstream\Http\Livewire\DeleteTenantForm;
 use Laravel\Jetstream\Http\Livewire\DeleteUserForm;
@@ -28,6 +35,7 @@ use Laravel\Jetstream\Http\Livewire\TenantStaffManager;
 use Laravel\Jetstream\Http\Livewire\TwoFactorAuthenticationForm;
 use Laravel\Jetstream\Http\Livewire\UpdatePasswordForm;
 use Laravel\Jetstream\Http\Livewire\UpdateProfileInformationForm;
+use Laravel\Jetstream\Http\Livewire\UpdateRecoveryChannelsForm;
 use Laravel\Jetstream\Http\Livewire\UpdateTeamNameForm;
 use Laravel\Jetstream\Http\Livewire\UpdateTenantNameForm;
 use Laravel\Jetstream\Http\Middleware\EnsureCustomerAccountContext;
@@ -66,6 +74,8 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->configureRoutes();
         $this->configureCommands();
         $this->configureTenancy();
+        $this->configureRateLimiting();
+        $this->configureAuditing();
 
         RedirectResponse::macro('banner', function ($message): RedirectResponse {
             /** @var \Illuminate\Http\RedirectResponse $this */
@@ -103,6 +113,16 @@ class JetstreamServiceProvider extends ServiceProvider
                 Livewire::component('profile.passkey-manager', PasskeyManager::class);
             }
 
+            if (Features::hasDataPrivacyFeatures()) {
+                Livewire::component('profile.data-privacy-form', DataPrivacyForm::class);
+            }
+
+            if (Features::hasAccountRecoveryFeatures()) {
+                Livewire::component('profile.update-recovery-channels-form', UpdateRecoveryChannelsForm::class);
+            }
+
+            Livewire::component('audit-log-viewer', AuditLogViewer::class);
+
             if (Features::hasApiFeatures()) {
                 Livewire::component('api.api-token-manager', ApiTokenManager::class);
             }
@@ -129,6 +149,57 @@ class JetstreamServiceProvider extends ServiceProvider
                 Livewire::component('portal.account-member-manager', AccountMemberManager::class);
             }
         }
+    }
+
+    /**
+     * Configure the rate limiters used by Jetstream's routes.
+     *
+     * System administrators, IP addresses listed in the
+     * "jetstream.throttle.bypass_ips" configuration option, and requests
+     * approved by the "Jetstream::bypassThrottlingUsing" callback bypass
+     * the limits entirely.
+     *
+     * @return void
+     */
+    protected function configureRateLimiting()
+    {
+        RateLimiter::for('jetstream', function (Request $request) {
+            if (Jetstream::bypassesThrottling($request)) {
+                return Limit::none();
+            }
+
+            $attempts = config('jetstream.throttle.attempts', 60);
+
+            $userId = $request->user()?->getAuthIdentifier();
+
+            return Limit::perMinute(is_int($attempts) && $attempts > 0 ? $attempts : 60)
+                ->by(is_scalar($userId) ? 'user:'.$userId : 'ip:'.($request->ip() ?? 'unknown'));
+        });
+
+        RateLimiter::for('jetstream-guest', function (Request $request) {
+            if (Jetstream::bypassesThrottling($request)) {
+                return Limit::none();
+            }
+
+            $attempts = config('jetstream.throttle.guest_attempts', 6);
+
+            return Limit::perMinute(is_int($attempts) && $attempts > 0 ? $attempts : 6)
+                ->by('ip:'.($request->ip() ?? 'unknown'));
+        });
+    }
+
+    /**
+     * Configure audit logging for authentication activity.
+     *
+     * @return void
+     */
+    protected function configureAuditing()
+    {
+        if (config('jetstream.audit.enabled', true) !== true) {
+            return;
+        }
+
+        Event::subscribe(AuthenticationEventSubscriber::class);
     }
 
     /**
@@ -182,6 +253,13 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2026_07_03_700000_create_customer_invitations_table.php' => database_path('migrations/2026_07_03_700000_create_customer_invitations_table.php'),
         ], 'jetstream-tenant-migrations');
 
+        $this->publishesMigrations([
+            __DIR__.'/../database/migrations/2026_07_03_800000_create_audit_logs_table.php' => database_path('migrations/2026_07_03_800000_create_audit_logs_table.php'),
+            __DIR__.'/../database/migrations/2026_07_03_810000_create_data_requests_table.php' => database_path('migrations/2026_07_03_810000_create_data_requests_table.php'),
+            __DIR__.'/../database/migrations/2026_07_03_820000_add_soft_delete_columns.php' => database_path('migrations/2026_07_03_820000_add_soft_delete_columns.php'),
+            __DIR__.'/../database/migrations/2026_07_03_830000_add_account_recovery_columns.php' => database_path('migrations/2026_07_03_830000_add_account_recovery_columns.php'),
+        ], 'jetstream-compliance-migrations');
+
         $this->publishes([
             __DIR__.'/../routes/livewire.php' => base_path('routes/jetstream.php'),
         ], 'jetstream-routes');
@@ -218,6 +296,7 @@ class JetstreamServiceProvider extends ServiceProvider
 
         $this->commands([
             Console\InstallCommand::class,
+            Console\PurgeCommand::class,
         ]);
     }
 }

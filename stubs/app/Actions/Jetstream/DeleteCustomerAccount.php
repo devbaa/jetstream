@@ -10,10 +10,15 @@ use Laravel\Jetstream\Contracts\DeletesCustomerAccounts;
 class DeleteCustomerAccount implements DeletesCustomerAccounts
 {
     /**
-     * Delete the given customer account.
+     * Soft delete the given customer account.
+     *
+     * The account is permanently purged by the jetstream:purge command
+     * once the configured retention period has elapsed.
      */
     public function delete(CustomerAccount $account): void
     {
-        $account->purge();
+        $account->resetCurrentSelections();
+
+        $account->delete();
     }
 }

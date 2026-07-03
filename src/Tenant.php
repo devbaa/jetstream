@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * @property int $id
@@ -12,9 +13,12 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $name
  * @property string $slug
  * @property bool $allow_customer_registration
+ * @property \Illuminate\Support\Carbon|null $deleted_at
  */
 abstract class Tenant extends Model
 {
+    use SoftDeletes;
+
     /**
      * Get the owner of the tenant.
      *
@@ -142,28 +146,38 @@ abstract class Tenant extends Model
     }
 
     /**
-     * Purge all of the tenant's resources.
+     * Clear the tenant from the current tenant selection of its users.
      *
      * @return void
      */
-    public function purge()
+    public function resetCurrentSelections()
     {
         $this->owner()->where('current_tenant_id', $this->id)
                 ->update(['current_tenant_id' => null]);
 
         $this->users()->where('current_tenant_id', $this->id)
                 ->update(['current_tenant_id' => null]);
+    }
+
+    /**
+     * Permanently purge all of the tenant's resources.
+     *
+     * @return void
+     */
+    public function purge()
+    {
+        $this->resetCurrentSelections();
 
         $this->users()->detach();
 
-        $this->customerAccounts->each->purge();
+        $this->customerAccounts()->withTrashed()->get()->each->purge();
 
         $this->customerInvitations()->delete();
 
         $this->roles()->delete();
 
-        $this->teams->each->purge();
+        $this->teams()->withTrashed()->get()->each->purge();
 
-        $this->delete();
+        $this->forceDelete();
     }
 }

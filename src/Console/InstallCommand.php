@@ -351,12 +351,14 @@ class InstallCommand extends Command implements PromptsForMissingInput
         (new Filesystem)->ensureDirectoryExists(resource_path('views/customers'));
         (new Filesystem)->ensureDirectoryExists(resource_path('views/portal'));
         (new Filesystem)->ensureDirectoryExists(resource_path('views/admin'));
+        (new Filesystem)->ensureDirectoryExists(resource_path('views/audit'));
 
         // Other Views...
         (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/tenants', resource_path('views/tenants'));
         (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/customers', resource_path('views/customers'));
         (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/portal', resource_path('views/portal'));
         (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/admin', resource_path('views/admin'));
+        (new Filesystem)->copyDirectory(__DIR__.'/../../stubs/livewire/resources/views/audit', resource_path('views/audit'));
 
         // Tests...
         $stubs = $this->getTestStubsPath();
@@ -383,6 +385,9 @@ class InstallCommand extends Command implements PromptsForMissingInput
         // Publish Tenant Migrations...
         $this->callSilent('vendor:publish', ['--tag' => 'jetstream-tenant-migrations', '--force' => true]);
 
+        // Publish Compliance Migrations (audit logs, data requests, soft deletes, recovery)...
+        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-compliance-migrations', '--force' => true]);
+
         // Configuration...
         $this->replaceInFile('// Features::tenants([\'portal\' => true, \'customer-registration\' => true])', 'Features::tenants([\'portal\' => true, \'customer-registration\' => true])', config_path('jetstream.php'));
 
@@ -396,6 +401,8 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy(__DIR__.'/../../stubs/app/Models/Role.php', app_path('Models/Role.php'));
         copy(__DIR__.'/../../stubs/app/Models/CustomerAccount.php', app_path('Models/CustomerAccount.php'));
         copy(__DIR__.'/../../stubs/app/Models/CustomerInvitation.php', app_path('Models/CustomerInvitation.php'));
+        copy(__DIR__.'/../../stubs/app/Models/AuditLog.php', app_path('Models/AuditLog.php'));
+        copy(__DIR__.'/../../stubs/app/Models/DataRequest.php', app_path('Models/DataRequest.php'));
         copy(__DIR__.'/../../stubs/app/Models/User.php', app_path('Models/User.php'));
 
         // Actions...

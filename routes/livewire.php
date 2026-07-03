@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Laravel\Jetstream\Http\Controllers\AccountRecoveryController;
 use Laravel\Jetstream\Http\Controllers\CurrentCustomerAccountController;
 use Laravel\Jetstream\Http\Controllers\CurrentTeamController;
 use Laravel\Jetstream\Http\Controllers\CurrentTenantController;
 use Laravel\Jetstream\Http\Controllers\CustomerInvitationController;
+use Laravel\Jetstream\Http\Controllers\Livewire\AdminAuditController;
 use Laravel\Jetstream\Http\Controllers\Livewire\AdminTenantController;
 use Laravel\Jetstream\Http\Controllers\Livewire\ApiTokenController;
 use Laravel\Jetstream\Http\Controllers\Livewire\CustomerRegistrationController;
@@ -17,6 +19,7 @@ use Laravel\Jetstream\Http\Controllers\Livewire\TenantController;
 use Laravel\Jetstream\Http\Controllers\Livewire\TenantCustomerController;
 use Laravel\Jetstream\Http\Controllers\Livewire\TermsOfServiceController;
 use Laravel\Jetstream\Http\Controllers\Livewire\UserProfileController;
+use Laravel\Jetstream\Http\Controllers\RecoveryEmailVerificationController;
 use Laravel\Jetstream\Http\Controllers\TeamInvitationController;
 use Laravel\Jetstream\Jetstream;
 
@@ -36,7 +39,7 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
         ? config('jetstream.auth_session')
         : null;
 
-    Route::group(['middleware' => array_filter([$authMiddleware, $authSessionMiddleware])], function () {
+    Route::group(['middleware' => array_filter([$authMiddleware, $authSessionMiddleware, 'throttle:jetstream'])], function () {
         // User & Profile...
         Route::get('/user/profile', [UserProfileController::class, 'show'])->name('profile.show');
 
@@ -72,6 +75,7 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
                 // System Administration...
                 Route::group(['middleware' => ['system.admin']], function () {
                     Route::get('/admin/tenants', [AdminTenantController::class, 'index'])->name('admin.tenants.index');
+                    Route::get('/admin/audit', [AdminAuditController::class, 'index'])->name('admin.audit.index');
                 });
 
                 // Customer Portal...
@@ -95,9 +99,21 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
 
     // Customer Self-Registration...
     if (Jetstream::hasTenantFeatures() && Jetstream::hasCustomerPortalFeatures()) {
-        Route::group(['middleware' => ['throttle:6,1']], function () {
+        Route::group(['middleware' => ['throttle:jetstream-guest']], function () {
             Route::get('/portal/register/{slug}', [CustomerRegistrationController::class, 'show'])->name('portal.register');
             Route::post('/portal/register/{slug}', [CustomerRegistrationController::class, 'store'])->name('portal.register.store');
         });
+    }
+
+    // Account Recovery...
+    if (Jetstream::hasAccountRecoveryFeatures()) {
+        Route::group(['middleware' => ['guest', 'throttle:jetstream-guest']], function () {
+            Route::get('/account-recovery', [AccountRecoveryController::class, 'show'])->name('account-recovery.show');
+            Route::post('/account-recovery', [AccountRecoveryController::class, 'store'])->name('account-recovery.store');
+        });
+
+        Route::get('/user/recovery-email/verify/{user}', [RecoveryEmailVerificationController::class, 'verify'])
+            ->middleware(['signed', 'throttle:jetstream-guest'])
+            ->name('recovery-email.verify');
     }
 });

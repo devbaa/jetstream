@@ -37,9 +37,25 @@
                 <x-section-border />
             @endif
 
+            @if (Laravel\Jetstream\Jetstream::hasAccountRecoveryFeatures())
+                <div class="mt-10 sm:mt-0">
+                    @livewire('profile.update-recovery-channels-form')
+                </div>
+
+                <x-section-border />
+            @endif
+
             <div class="mt-10 sm:mt-0">
                 @livewire('profile.logout-other-browser-sessions-form')
             </div>
+
+            @if (Laravel\Jetstream\Jetstream::hasDataPrivacyFeatures())
+                <x-section-border />
+
+                <div class="mt-10 sm:mt-0">
+                    @livewire('profile.data-privacy-form')
+                </div>
+            @endif
 
             @if (Laravel\Jetstream\Jetstream::hasAccountDeletionFeatures())
                 <x-section-border />

@@ -178,6 +178,10 @@
                                 <x-dropdown-link href="{{ route('admin.tenants.index') }}">
                                     {{ __('Tenant Administration') }}
                                 </x-dropdown-link>
+
+                                <x-dropdown-link href="{{ route('admin.audit.index') }}">
+                                    {{ __('Audit Log') }}
+                                </x-dropdown-link>
                             @endif
 
                             <div class="border-t border-gray-200 dark:border-gray-600"></div>

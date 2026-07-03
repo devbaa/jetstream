@@ -103,6 +103,26 @@ class Features
     }
 
     /**
+     * Determine if the application lets users exercise their data rights.
+     *
+     * @return bool
+     */
+    public static function hasDataPrivacyFeatures()
+    {
+        return static::enabled(static::dataPrivacy());
+    }
+
+    /**
+     * Determine if the application supports account recovery channels.
+     *
+     * @return bool
+     */
+    public static function hasAccountRecoveryFeatures()
+    {
+        return static::enabled(static::accountRecovery());
+    }
+
+    /**
      * Determine if the application has terms of service / privacy policy confirmation enabled.
      *
      * @return bool
@@ -190,5 +210,25 @@ class Features
     public static function accountDeletion()
     {
         return 'account-deletion';
+    }
+
+    /**
+     * Enable the data privacy feature (data export and deletion requests).
+     *
+     * @return string
+     */
+    public static function dataPrivacy()
+    {
+        return 'data-privacy';
+    }
+
+    /**
+     * Enable the account recovery feature (phone and recovery email).
+     *
+     * @return string
+     */
+    public static function accountRecovery()
+    {
+        return 'account-recovery';
     }
 }

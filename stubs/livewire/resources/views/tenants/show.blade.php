@@ -19,6 +19,14 @@
                 </div>
             @endif
 
+            @if (Gate::check('update', $tenant))
+                <x-section-border />
+
+                <div class="mt-10 sm:mt-0">
+                    @livewire('audit-log-viewer', ['tenant' => $tenant])
+                </div>
+            @endif
+
             @if (Gate::check('delete', $tenant))
                 <x-section-border />
 

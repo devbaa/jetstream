@@ -152,6 +152,14 @@ class TenantBehaviorTest extends OrchestraTestCase
 
         (new DeleteTenant)->delete($tenant->fresh());
 
+        // The delete action soft deletes the tenant and releases current selections.
+        $this->assertTrue($tenant->fresh()->trashed());
+        $this->assertNull($member->fresh()->current_tenant_id);
+        $this->assertNull($owner->fresh()->current_tenant_id);
+
+        // Purging permanently cascades through the tenant's resources.
+        $tenant->fresh()->purge();
+
         $this->assertNull($tenant->fresh());
         $this->assertNull($team->fresh());
         $this->assertNull($account->fresh());

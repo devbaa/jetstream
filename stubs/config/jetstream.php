@@ -66,6 +66,8 @@ return [
         // Features::teams(['invitations' => true]),
         // Features::tenants(['portal' => true, 'customer-registration' => true]),
         Features::accountDeletion(),
+        Features::dataPrivacy(),
+        Features::accountRecovery(),
     ],
 
     /*
@@ -81,6 +83,74 @@ return [
 
     'tenants' => [
         'self_service_creation' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Audit Logging
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, every model that uses the Auditable trait records a full
+    | change log — including the acting user, tenant, IP address, and user
+    | agent — and authentication activity is recorded as well. Entries older
+    | than the retention period are pruned by the jetstream:purge command;
+    | a null retention keeps them forever.
+    |
+    */
+
+    'audit' => [
+        'enabled' => true,
+        'retention_days' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Purge Retention
+    |--------------------------------------------------------------------------
+    |
+    | Deleting a user, tenant, team, or customer account only soft deletes
+    | it. The jetstream:purge command permanently erases soft-deleted
+    | records once they have been trashed for this many days. Schedule the
+    | command to run daily: Schedule::command('jetstream:purge')->daily().
+    |
+    */
+
+    'purge' => [
+        'retention_days' => 30,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Data Privacy
+    |--------------------------------------------------------------------------
+    |
+    | When a user files a data deletion request (GDPR / CCPA / KVKK), the
+    | request is held for this grace period before the jetstream:purge
+    | command soft deletes the account. The user may cancel the request at
+    | any time during the grace period.
+    |
+    */
+
+    'privacy' => [
+        'grace_period_days' => 30,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rate Limiting
+    |--------------------------------------------------------------------------
+    |
+    | Jetstream's routes are throttled per user (or per IP for guests).
+    | System administrators, the IP addresses listed below, and requests
+    | approved by a Jetstream::bypassThrottlingUsing callback bypass the
+    | limits entirely.
+    |
+    */
+
+    'throttle' => [
+        'attempts' => 60,
+        'guest_attempts' => 6,
+        'bypass_ips' => [],
     ],
 
     /*

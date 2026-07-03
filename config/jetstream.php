@@ -12,5 +12,20 @@ return [
     'tenants' => [
         'self_service_creation' => true,
     ],
+    'audit' => [
+        'enabled' => true,
+        'retention_days' => null,
+    ],
+    'purge' => [
+        'retention_days' => 30,
+    ],
+    'privacy' => [
+        'grace_period_days' => 30,
+    ],
+    'throttle' => [
+        'attempts' => 60,
+        'guest_attempts' => 6,
+        'bypass_ips' => [],
+    ],
     'profile_photo_disk' => 'public',
 ];
