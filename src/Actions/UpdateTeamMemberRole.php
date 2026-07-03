@@ -17,7 +17,7 @@ class UpdateTeamMemberRole
      *
      * @param  \Illuminate\Foundation\Auth\User  $user
      * @param  \Laravel\Jetstream\Team  $team
-     * @param  int  $teamMemberId
+     * @param  string  $teamMemberId
      * @param  string  $role
      * @return void
      */

@@ -25,7 +25,7 @@ trait BelongsToTenant
 
             if (is_null($model->tenant_id) &&
                 ! $context->shouldBypass() &&
-                is_int($tenantId)) {
+                is_string($tenantId)) {
                 $model->tenant_id = $tenantId;
             }
         });

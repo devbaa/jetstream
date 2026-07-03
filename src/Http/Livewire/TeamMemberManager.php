@@ -64,7 +64,7 @@ class TeamMemberManager extends Component
     /**
      * The ID of the team member being removed.
      *
-     * @var int|null
+     * @var string|null
      */
     public $teamMemberIdBeingRemoved = null;
 
@@ -127,7 +127,7 @@ class TeamMemberManager extends Component
     /**
      * Cancel a pending team member invitation.
      *
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return void
      */
     public function cancelTeamInvitation($invitationId)
@@ -148,7 +148,7 @@ class TeamMemberManager extends Component
     /**
      * Allow the given user's role to be managed.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function manageRole($userId)
@@ -214,7 +214,7 @@ class TeamMemberManager extends Component
     /**
      * Confirm that the given team member should be removed.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function confirmTeamMemberRemoval($userId)

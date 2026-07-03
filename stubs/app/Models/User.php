@@ -6,6 +6,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -21,7 +22,7 @@ use Laravel\Jetstream\HasTenants;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
- * @property int $id
+ * @property string $id
  * @property string $name
  * @property string|null $middle_name
  * @property string|null $last_name
@@ -36,9 +37,9 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $password
  * @property \Illuminate\Support\Carbon|null $email_verified_at
  * @property string|null $profile_photo_path
- * @property int|null $current_team_id
- * @property int|null $current_tenant_id
- * @property int|null $current_customer_account_id
+ * @property string|null $current_team_id
+ * @property string|null $current_tenant_id
+ * @property string|null $current_customer_account_id
  * @property bool $is_system_admin
  * @property \Illuminate\Support\Carbon|null $blocked_at
  * @property string|null $blocked_reason
@@ -50,6 +51,7 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable implements PasskeyUser
 {
     use Auditable;
+    use HasUuids;
     use HasApiTokens;
     use HasCustomerAccounts;
 

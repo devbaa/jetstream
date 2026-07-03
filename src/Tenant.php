@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * @property int $id
- * @property int $user_id
+ * @property string $id
+ * @property string $user_id
  * @property string $name
  * @property string $slug
  * @property bool $allow_customer_registration
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 abstract class Tenant extends Model
 {
+    use HasUuids;
     use SoftDeletes;
 
     /**

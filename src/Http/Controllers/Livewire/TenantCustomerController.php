@@ -15,7 +15,7 @@ class TenantCustomerController extends Controller
      * Show the tenant's customer management screen.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  int  $tenantId
+     * @param  string  $tenantId
      * @return \Illuminate\View\View
      */
     public function index(Request $request, $tenantId)

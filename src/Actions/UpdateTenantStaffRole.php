@@ -17,7 +17,7 @@ class UpdateTenantStaffRole
      *
      * @param  \Illuminate\Foundation\Auth\User  $user
      * @param  \Laravel\Jetstream\Tenant  $tenant
-     * @param  int  $staffMemberId
+     * @param  string  $staffMemberId
      * @param  string  $role
      * @return void
      */

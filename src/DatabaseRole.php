@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Jetstream\Tenancy\BelongsToTenant;
 
 /**
- * @property int $id
- * @property int|null $tenant_id
+ * @property string $id
+ * @property string|null $tenant_id
  * @property string $key
  * @property string $name
  * @property string|null $description
@@ -17,6 +18,8 @@ use Laravel\Jetstream\Tenancy\BelongsToTenant;
  */
 abstract class DatabaseRole extends Model
 {
+    use HasUuids;
+
     use BelongsToTenant;
 
     /**

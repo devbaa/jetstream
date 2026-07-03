@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Jetstream\Tenancy\BelongsToTenant;
 
 /**
- * @property int $id
- * @property int $tenant_id
- * @property int|null $customer_account_id
+ * @property string $id
+ * @property string $tenant_id
+ * @property string|null $customer_account_id
  * @property string $email
  */
 abstract class CustomerInvitation extends Model
 {
+    use HasUuids;
+
     use BelongsToTenant;
 
     /**

@@ -16,7 +16,7 @@ class FakePhoneVerificationSender implements SendsPhoneVerifications
     /**
      * The ID of the user the last code was sent to.
      */
-    public static ?int $lastUserId = null;
+    public static ?string $lastUserId = null;
 
     /**
      * Capture the verification code instead of sending it.

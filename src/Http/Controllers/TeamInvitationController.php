@@ -17,7 +17,7 @@ class TeamInvitationController extends Controller
      * Accept a team invitation.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return \Illuminate\Http\RedirectResponse
      */
     public function accept(Request $request, $invitationId)
@@ -46,7 +46,7 @@ class TeamInvitationController extends Controller
      * Cancel the given team invitation.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return \Illuminate\Http\RedirectResponse
      */
     public function destroy(Request $request, $invitationId)

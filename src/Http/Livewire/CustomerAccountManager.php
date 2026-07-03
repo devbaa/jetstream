@@ -40,7 +40,7 @@ class CustomerAccountManager extends Component
     /**
      * The ID of the customer account being deleted.
      *
-     * @var int|null
+     * @var string|null
      */
     public $accountIdBeingDeleted = null;
 
@@ -82,7 +82,7 @@ class CustomerAccountManager extends Component
     /**
      * Cancel a pending customer invitation.
      *
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return void
      */
     public function cancelCustomerInvitation($invitationId)
@@ -100,7 +100,7 @@ class CustomerAccountManager extends Component
      * A frozen account's members lose access to the customer portal for the
      * account until it is unfrozen.
      *
-     * @param  int  $accountId
+     * @param  string  $accountId
      * @return void
      */
     public function toggleAccountFreeze($accountId)
@@ -121,7 +121,7 @@ class CustomerAccountManager extends Component
     /**
      * Confirm that the given customer account should be deleted.
      *
-     * @param  int  $accountId
+     * @param  string  $accountId
      * @return void
      */
     public function confirmAccountDeletion($accountId)

@@ -14,9 +14,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('customer_invitations', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('tenant_id')->index();
-            $table->foreignId('customer_account_id')->nullable()->index();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('tenant_id')->index();
+            $table->foreignUuid('customer_account_id')->nullable()->index();
             $table->string('email');
             $table->timestamps();
 

@@ -4,19 +4,21 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * @property int $id
- * @property int $user_id
+ * @property string $id
+ * @property string $user_id
  * @property string $name
  * @property bool $personal_team
- * @property int|null $tenant_id
+ * @property string|null $tenant_id
  * @property \Illuminate\Support\Carbon|null $deleted_at
  */
 abstract class Team extends Model
 {
+    use HasUuids;
     use SoftDeletes;
 
     /**

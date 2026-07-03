@@ -24,6 +24,12 @@
                     <form method="POST" action="{{ route('portal.register.store', ['slug' => $tenant->slug]) }}" class="mt-6">
                         @csrf
 
+                        <!-- Honeypot: invisible to humans, tempting to bots. Leave empty. -->
+                        <div class="hidden" aria-hidden="true">
+                            <label for="website">Website</label>
+                            <input id="website" type="text" name="website" value="" tabindex="-1" autocomplete="off" />
+                        </div>
+
                         <x-button>
                             {{ __('Create Customer Account') }}
                         </x-button>

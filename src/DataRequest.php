@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * @property int $id
- * @property int $user_id
+ * @property string $id
+ * @property string $user_id
  * @property string $type
  * @property string $status
  * @property string|null $reason
@@ -20,6 +21,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 abstract class DataRequest extends Model
 {
+    use HasUuids;
+
     /**
      * The data request types.
      */

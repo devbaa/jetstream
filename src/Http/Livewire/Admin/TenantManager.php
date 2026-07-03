@@ -54,7 +54,7 @@ class TenantManager extends Component
     /**
      * The ID of the tenant being deleted.
      *
-     * @var int|null
+     * @var string|null
      */
     public $tenantIdBeingDeleted = null;
 
@@ -103,7 +103,7 @@ class TenantManager extends Component
     /**
      * Toggle whether the given tenant allows customer self-registration.
      *
-     * @param  int  $tenantId
+     * @param  string  $tenantId
      * @return void
      */
     public function toggleCustomerRegistration($tenantId)
@@ -121,7 +121,7 @@ class TenantManager extends Component
      * A frozen tenant's staff and customers lose access to the tenant until
      * it is unfrozen.
      *
-     * @param  int  $tenantId
+     * @param  string  $tenantId
      * @return void
      */
     public function toggleTenantFreeze($tenantId)
@@ -144,7 +144,7 @@ class TenantManager extends Component
     /**
      * Confirm that the given tenant should be deleted.
      *
-     * @param  int  $tenantId
+     * @param  string  $tenantId
      * @return void
      */
     public function confirmTenantDeletion($tenantId)

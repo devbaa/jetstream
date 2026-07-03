@@ -35,7 +35,7 @@ class UserManager extends Component
     /**
      * The ID of the user being blocked.
      *
-     * @var int|null
+     * @var string|null
      */
     public $userIdBeingBlocked = null;
 
@@ -49,7 +49,7 @@ class UserManager extends Component
     /**
      * Confirm that the given user should be blocked.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function confirmUserBlock($userId)
@@ -74,7 +74,7 @@ class UserManager extends Component
             'reason' => ['nullable', 'string', 'max:255'],
         ])->validateWithBag('blockUser');
 
-        $subject = Jetstream::findUserByIdOrFail($this->userIdBeingBlocked ?? 0);
+        $subject = Jetstream::findUserByIdOrFail($this->userIdBeingBlocked ?? '');
 
         if ($subject->id === $this->user->id) {
             $this->addError('reason', __('You may not block your own account.'));
@@ -99,7 +99,7 @@ class UserManager extends Component
     /**
      * Unblock the given user.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function unblockUser($userId)
@@ -122,7 +122,7 @@ class UserManager extends Component
      * Use this to restore access for a user who lost both their
      * authenticator device and their recovery codes.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function resetTwoFactorAuthentication($userId)
@@ -144,7 +144,7 @@ class UserManager extends Component
      * Use this to restore access for a user who lost the devices that hold
      * their passkeys.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function resetPasskeys($userId)

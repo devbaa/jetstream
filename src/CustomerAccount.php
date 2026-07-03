@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Jetstream\Tenancy\BelongsToTenant;
 
 /**
- * @property int $id
- * @property int $tenant_id
- * @property int $user_id
+ * @property string $id
+ * @property string $tenant_id
+ * @property string $user_id
  * @property string $name
  * @property \Illuminate\Support\Carbon|string|null $frozen_at
  * @property \Illuminate\Support\Carbon|null $deleted_at
@@ -19,6 +20,7 @@ use Laravel\Jetstream\Tenancy\BelongsToTenant;
 abstract class CustomerAccount extends Model
 {
     use BelongsToTenant;
+    use HasUuids;
     use SoftDeletes;
 
     /**

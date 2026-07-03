@@ -15,7 +15,7 @@ class TenantController extends Controller
      * Show the tenant management screen.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  int  $tenantId
+     * @param  string  $tenantId
      * @return \Illuminate\View\View
      */
     public function show(Request $request, $tenantId)

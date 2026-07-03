@@ -38,7 +38,7 @@ class AccountMemberManager extends Component
     /**
      * The ID of the member being removed.
      *
-     * @var int|null
+     * @var string|null
      */
     public $memberIdBeingRemoved = null;
 
@@ -90,7 +90,7 @@ class AccountMemberManager extends Component
     /**
      * Cancel a pending member invitation.
      *
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return void
      */
     public function cancelInvitation($invitationId)
@@ -123,7 +123,7 @@ class AccountMemberManager extends Component
     /**
      * Confirm that the given member should be removed.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function confirmMemberRemoval($userId)

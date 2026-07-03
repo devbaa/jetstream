@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * @property int $id
- * @property int $team_id
+ * @property string $id
+ * @property string $team_id
  * @property string $email
  * @property string|null $role
  */
 class TeamInvitation extends Model
 {
+    use HasUuids;
+
     /**
      * The attributes that are mass assignable.
      *

@@ -18,7 +18,7 @@ class CurrentTenantController extends Controller
      */
     public function update(Request $request)
     {
-        $tenant = Jetstream::newTenantModel()->newQuery()->findOrFail($request->integer('tenant_id'));
+        $tenant = Jetstream::newTenantModel()->newQuery()->findOrFail($request->string('tenant_id')->toString());
 
         if (! Jetstream::currentUser()->switchTenant($tenant)) {
             abort(403);

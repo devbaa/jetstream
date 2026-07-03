@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * @property int $id
- * @property int|null $tenant_id
- * @property int|null $user_id
+ * @property string $id
+ * @property string|null $tenant_id
+ * @property string|null $user_id
  * @property string $event
  * @property string|null $auditable_type
- * @property int|null $auditable_id
+ * @property string|null $auditable_id
  * @property array<string, mixed>|null $old_values
  * @property array<string, mixed>|null $new_values
  * @property string|null $ip_address
@@ -21,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 abstract class AuditLog extends Model
 {
+    use HasUuids;
+
     /**
      * Audit logs are immutable and only carry a creation timestamp.
      */

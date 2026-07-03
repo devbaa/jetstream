@@ -383,7 +383,7 @@ class Jetstream
     /**
      * Find a user instance by the given ID.
      *
-     * @param  int  $id
+     * @param  string  $id
      * @return \App\Models\User
      */
     public static function findUserByIdOrFail($id)

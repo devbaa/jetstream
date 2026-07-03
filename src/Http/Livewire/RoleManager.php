@@ -33,7 +33,7 @@ class RoleManager extends Component
     /**
      * The ID of the tenant role being edited, if any.
      *
-     * @var int|null
+     * @var string|null
      */
     public $roleIdBeingUpdated = null;
 
@@ -59,7 +59,7 @@ class RoleManager extends Component
     /**
      * The ID of the tenant role being deleted.
      *
-     * @var int|null
+     * @var string|null
      */
     public $roleIdBeingDeleted = null;
 
@@ -176,7 +176,7 @@ class RoleManager extends Component
     /**
      * Confirm that the given tenant role should be deleted.
      *
-     * @param  int  $roleId
+     * @param  string  $roleId
      * @return void
      */
     public function confirmRoleDeletion($roleId)
@@ -231,7 +231,7 @@ class RoleManager extends Component
     /**
      * Get the keys of the roles that are owned by the tenant.
      *
-     * @return array<string, int>
+     * @return array<string, string>
      */
     public function getCustomRoleKeysProperty()
     {

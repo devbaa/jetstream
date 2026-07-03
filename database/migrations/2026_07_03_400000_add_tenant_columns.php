@@ -14,13 +14,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->foreignId('current_tenant_id')->nullable();
-            $table->foreignId('current_customer_account_id')->nullable();
+            $table->uuid('current_tenant_id')->nullable();
+            $table->uuid('current_customer_account_id')->nullable();
             $table->boolean('is_system_admin')->default(false);
         });
 
         Schema::table('teams', function (Blueprint $table) {
-            $table->foreignId('tenant_id')->nullable()->index();
+            $table->foreignUuid('tenant_id')->nullable()->index();
         });
     }
 

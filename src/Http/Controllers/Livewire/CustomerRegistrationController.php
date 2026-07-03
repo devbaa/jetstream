@@ -39,6 +39,9 @@ class CustomerRegistrationController extends Controller
      */
     public function store(Request $request, $slug)
     {
+        // Honeypot: the hidden "website" field must stay empty. Bots fill it.
+        $request->validate(['website' => ['prohibited']]);
+
         $tenant = $this->resolveTenant($slug);
 
         $user = $request->user();

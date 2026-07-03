@@ -86,7 +86,7 @@ class AuthenticationEventSubscriber
             $user instanceof Model ? $user : null,
             [],
             $context,
-            is_int($id) ? $id : null,
+            is_string($id) && $id !== '' ? $id : null,
         );
     }
 

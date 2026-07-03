@@ -63,7 +63,7 @@ class TenantStaffManager extends Component
     /**
      * The ID of the staff member being removed.
      *
-     * @var int|null
+     * @var string|null
      */
     public $staffIdBeingRemoved = null;
 
@@ -117,7 +117,7 @@ class TenantStaffManager extends Component
     /**
      * Allow the given staff member's role to be managed.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function manageRole($userId)
@@ -185,7 +185,7 @@ class TenantStaffManager extends Component
      * Frozen staff members remain on the tenant but lose all access to it
      * until unfrozen. Owners cannot be frozen.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function toggleStaffFreeze($userId)
@@ -214,7 +214,7 @@ class TenantStaffManager extends Component
     /**
      * Confirm that the given staff member should be removed.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function confirmStaffRemoval($userId)

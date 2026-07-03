@@ -22,7 +22,7 @@ class CustomerInvitationController extends Controller
      * owned by the invitee.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return \Illuminate\Http\RedirectResponse
      */
     public function accept(Request $request, $invitationId)
@@ -58,7 +58,7 @@ class CustomerInvitationController extends Controller
      * Cancel the given customer invitation.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return \Illuminate\Http\RedirectResponse
      */
     public function destroy(Request $request, $invitationId)

@@ -17,10 +17,10 @@ class RecoveryEmailVerificationController extends Controller
      * and a hash of the address that was current when the link was sent.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  int  $userId
+     * @param  string  $userId
      * @return \Illuminate\Http\RedirectResponse
      */
-    public function verify(Request $request, int $userId)
+    public function verify(Request $request, string $userId)
     {
         $user = Jetstream::findUserByIdOrFail($userId);
 

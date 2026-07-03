@@ -31,7 +31,7 @@ class Auditor
         ?Model $auditable = null,
         array $old = [],
         array $new = [],
-        ?int $userId = null,
+        ?string $userId = null,
     ): ?AuditLog {
         if (! $this->enabled()) {
             return null;
@@ -57,29 +57,29 @@ class Auditor
     /**
      * Determine the tenant the entry should be attributed to.
      */
-    protected function tenantId(?Model $auditable): ?int
+    protected function tenantId(?Model $auditable): ?string
     {
         if ($auditable !== null) {
             $tenantId = $auditable->getAttribute('tenant_id');
 
-            if (is_int($tenantId)) {
+            if (is_string($tenantId) && $tenantId !== '') {
                 return $tenantId;
             }
         }
 
         $tenantId = app(TenantContext::class)->currentId();
 
-        return is_int($tenantId) ? $tenantId : null;
+        return is_string($tenantId) && $tenantId !== '' ? $tenantId : null;
     }
 
     /**
      * Get the ID of the currently authenticated user, if any.
      */
-    protected function currentUserId(): ?int
+    protected function currentUserId(): ?string
     {
         $id = auth()->id();
 
-        return is_int($id) ? $id : null;
+        return is_string($id) && $id !== '' ? $id : null;
     }
 
     /**

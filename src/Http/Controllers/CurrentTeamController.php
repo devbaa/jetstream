@@ -18,7 +18,7 @@ class CurrentTeamController extends Controller
      */
     public function update(Request $request)
     {
-        $team = Jetstream::newTeamModel()->newQuery()->findOrFail($request->integer('team_id'));
+        $team = Jetstream::newTeamModel()->newQuery()->findOrFail($request->string('team_id')->toString());
 
         if (! Jetstream::currentUser()->switchTeam($team)) {
             abort(403);
