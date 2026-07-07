@@ -8,6 +8,7 @@ use App\Actions\Jetstream\DeleteUser;
 use App\Models\AuditLog;
 use App\Models\CustomerAccount;
 use App\Models\DataRequest;
+use App\Models\DomainClaim;
 use App\Models\Team;
 use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -226,6 +227,82 @@ class PurgeCommandTest extends OrchestraTestCase
         $this->assertSame(0, DB::table('customer_account_user')->count());
         $this->assertSame(0, DB::table('customer_invitations')->count());
         $this->assertNull($customer->fresh()->current_customer_account_id);
+    }
+
+    public function test_superseded_domain_claims_are_only_purged_on_demand(): void
+    {
+        $previous = $this->createUser('previous@acme.com');
+        $current = $this->createUser('current@acme.com');
+
+        $historic = DomainClaim::query()->forceCreate([
+            'user_id' => $previous->id,
+            'domain' => 'acme.com',
+            'token' => 'historic-token',
+            'verified_at' => now()->subYear(),
+            'superseded_at' => now()->subMonth(),
+        ]);
+
+        $active = DomainClaim::query()->forceCreate([
+            'user_id' => $current->id,
+            'domain' => 'acme.com',
+            'token' => 'active-token',
+            'verified_at' => now()->subMonth(),
+        ]);
+
+        $historic->recordActivity($previous, 'member:blocked');
+        $active->recordActivity($current, 'domain:verified');
+
+        // A plain purge keeps the historic tree...
+        $this->artisan('jetstream:purge')->assertSuccessful();
+
+        $this->assertNotNull($historic->fresh());
+        $this->assertSame(1, $historic->activities()->count());
+
+        // The system administrator explicitly purges the history...
+        $this->artisan('jetstream:purge', ['--domain-history' => true])->assertSuccessful();
+
+        $this->assertNull($historic->fresh());
+        $this->assertSame(0, DB::table('domain_activities')->where('domain_claim_id', $historic->id)->count());
+
+        // The active tree is untouched...
+        $this->assertNotNull($active->fresh());
+        $this->assertSame(1, $active->activities()->count());
+    }
+
+    public function test_purging_a_user_erases_their_domain_claims_and_anonymizes_their_subject_activity(): void
+    {
+        $user = $this->createUser('leaving@acme.com');
+        $admin = $this->createUser('admin@acme.com');
+
+        $userClaim = DomainClaim::query()->forceCreate([
+            'user_id' => $user->id,
+            'domain' => 'acme.com',
+            'token' => 'leaving-token',
+            'verified_at' => now()->subYear(),
+            'superseded_at' => now()->subMonth(),
+        ]);
+
+        $userClaim->recordActivity($user, 'domain:verified');
+
+        $adminClaim = DomainClaim::query()->forceCreate([
+            'user_id' => $admin->id,
+            'domain' => 'acme.com',
+            'token' => 'admin-token',
+            'verified_at' => now()->subMonth(),
+        ]);
+
+        $activityAboutUser = $adminClaim->recordActivity($admin, 'member:blocked', $user);
+
+        $user->delete();
+        $user->forceFill(['deleted_at' => now()->subDays(45)])->save();
+
+        $this->artisan('jetstream:purge')->assertSuccessful();
+
+        $this->assertNull(DomainClaim::query()->find($userClaim->id));
+        $this->assertSame(0, DB::table('domain_activities')->where('domain_claim_id', $userClaim->id)->count());
+
+        $this->assertNotNull($adminClaim->fresh());
+        $this->assertNull($activityAboutUser->fresh()->subject_id);
     }
 
     public function test_audit_logs_past_retention_are_pruned(): void
