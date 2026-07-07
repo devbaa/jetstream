@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,6 +47,7 @@ use Laravel\Jetstream\Http\Middleware\EnsureCustomerAccountContext;
 use Laravel\Jetstream\Http\Middleware\EnsureTenantContext;
 use Laravel\Jetstream\Http\Middleware\EnsureUserIsNotBlocked;
 use Laravel\Jetstream\Http\Middleware\EnsureUserIsSystemAdmin;
+use Laravel\Jetstream\Listeners\AddVerifiedUserToDomainTeams;
 use Laravel\Jetstream\Tenancy\CustomerContext;
 use Laravel\Jetstream\Tenancy\TenantContext;
 use Livewire\Livewire;
@@ -160,6 +162,10 @@ class JetstreamServiceProvider extends ServiceProvider
             if (Features::hasDomainAdminFeatures()) {
                 Livewire::component('domains.domain-admin-manager', DomainAdminManager::class);
             }
+        }
+
+        if (Features::hasDomainAdminFeatures() && Features::hasTeamFeatures()) {
+            Event::listen(Verified::class, AddVerifiedUserToDomainTeams::class);
         }
     }
 
@@ -317,6 +323,7 @@ class JetstreamServiceProvider extends ServiceProvider
         }
 
         $this->commands([
+            Console\CreateUserCommand::class,
             Console\InstallCommand::class,
             Console\PurgeCommand::class,
         ]);

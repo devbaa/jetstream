@@ -17,10 +17,7 @@ class VerifyDomainClaim
      * Attempt to verify the given claim and hand it the domain admin flag.
      *
      * The registered domain verifier looks the claim's token up on the
-     * domain. On success every other verified claim for the domain is
-     * superseded — the most recent successful verification always holds
-     * the flag — while the superseded claims' recorded activity remains
-     * untouched as a historic tree.
+     * domain. On success the claim is activated through activate().
      *
      * Returns false when the token could not be found on the domain.
      */
@@ -32,6 +29,22 @@ class VerifyDomainClaim
             return false;
         }
 
+        $this->activate($claim, $method);
+
+        return true;
+    }
+
+    /**
+     * Hand the claim the domain admin flag.
+     *
+     * Every other verified claim for the domain is superseded — the most
+     * recent successful verification always holds the flag — while the
+     * superseded claims' recorded activity remains untouched as a historic
+     * tree. The domain's verified users are then enrolled into the new
+     * master's team.
+     */
+    public function activate(DomainClaim $claim, string $method): void
+    {
         $superseded = DB::transaction(function () use ($claim, $method) {
             $superseded = Jetstream::newDomainClaimModel()->newQuery()
                 ->where('domain', $claim->domain)
@@ -60,6 +73,6 @@ class VerifyDomainClaim
 
         DomainClaimVerified::dispatch($claim);
 
-        return true;
+        app(AddUserToDomainTeams::class)->addAllForClaim($claim);
     }
 }
