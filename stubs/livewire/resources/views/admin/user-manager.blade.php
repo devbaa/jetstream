@@ -38,7 +38,7 @@
                     <div class="flex items-center">
                         @if ($user->two_factor_secret)
                             <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
-                                    wire:click="resetTwoFactorAuthentication({{ $user->id }})"
+                                    wire:click="resetTwoFactorAuthentication('{{ $user->id }}')"
                                     wire:confirm="{{ __('Reset two-factor authentication for this user?') }}">
                                 {{ __('Reset 2FA') }}
                             </button>
@@ -46,7 +46,7 @@
 
                         @if ($user->passkeys()->exists())
                             <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
-                                    wire:click="resetPasskeys({{ $user->id }})"
+                                    wire:click="resetPasskeys('{{ $user->id }}')"
                                     wire:confirm="{{ __('Delete all passkeys for this user?') }}">
                                 {{ __('Reset Passkeys') }}
                             </button>
@@ -54,12 +54,12 @@
 
                         @if ($user->isBlocked())
                             <button class="cursor-pointer ms-6 text-sm text-green-500 underline focus:outline-none"
-                                    wire:click="unblockUser({{ $user->id }})">
+                                    wire:click="unblockUser('{{ $user->id }}')">
                                 {{ __('Unblock') }}
                             </button>
                         @else
                             <button class="cursor-pointer ms-6 text-sm text-red-500 focus:outline-none"
-                                    wire:click="confirmUserBlock({{ $user->id }})">
+                                    wire:click="confirmUserBlock('{{ $user->id }}')">
                                 {{ __('Block') }}
                             </button>
                         @endif

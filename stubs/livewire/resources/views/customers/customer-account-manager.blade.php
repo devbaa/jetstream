@@ -50,7 +50,7 @@
 
                                 <div class="flex items-center">
                                     <button class="cursor-pointer ms-6 text-sm text-red-500 focus:outline-none"
-                                                        wire:click="cancelCustomerInvitation({{ $invitation->id }})">
+                                                        wire:click="cancelCustomerInvitation('{{ $invitation->id }}')">
                                         {{ __('Cancel') }}
                                     </button>
                                 </div>
@@ -97,12 +97,12 @@
                                 @endif
 
                                 <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
-                                                    wire:click="toggleAccountFreeze({{ $account->id }})">
+                                                    wire:click="toggleAccountFreeze('{{ $account->id }}')">
                                     {{ $account->isFrozen() ? __('Unfreeze') : __('Freeze') }}
                                 </button>
 
                                 <button class="cursor-pointer ms-6 text-sm text-red-500 focus:outline-none"
-                                                    wire:click="confirmAccountDeletion({{ $account->id }})">
+                                                    wire:click="confirmAccountDeletion('{{ $account->id }}')">
                                     {{ __('Delete') }}
                                 </button>
                             </div>
