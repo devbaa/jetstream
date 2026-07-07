@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use JsonSerializable;
@@ -23,14 +25,14 @@ class Role implements JsonSerializable
     /**
      * The role's permissions.
      *
-     * @var array
+     * @var list<string>
      */
     public $permissions;
 
     /**
      * The role's description.
      *
-     * @var string
+     * @var string|null
      */
     public $description;
 
@@ -39,7 +41,7 @@ class Role implements JsonSerializable
      *
      * @param  string  $key
      * @param  string  $name
-     * @param  array  $permissions
+     * @param  list<string>  $permissions
      * @return void
      */
     public function __construct(string $key, string $name, array $permissions)
@@ -65,7 +67,7 @@ class Role implements JsonSerializable
     /**
      * Get the JSON serializable representation of the object.
      *
-     * @return array
+     * @return array<string, mixed>
      */
     #[\ReturnTypeWillChange]
     public function jsonSerialize()

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tests;
 
 use App\Actions\Jetstream\CreateTeam;
@@ -30,6 +32,16 @@ class DeleteTeamTest extends OrchestraTestCase
         $action = new DeleteTeam;
 
         $action->delete($team);
+
+        $this->assertTrue($team->fresh()->trashed());
+        $this->assertNull(Team::find($team->id));
+    }
+
+    public function test_purging_a_team_permanently_deletes_it()
+    {
+        $team = $this->createTeam();
+
+        $team->purge();
 
         $this->assertNull($team->fresh());
     }

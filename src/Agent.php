@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Closure;
@@ -62,11 +64,13 @@ class Agent extends MobileDetect
      */
     public function platform()
     {
-        return $this->retrieveUsingCacheOrResolve('jetstream.platform', function () {
+        $platform = $this->retrieveUsingCacheOrResolve('jetstream.platform', function () {
             return $this->findDetectionRulesAgainstUserAgent(
                 $this->mergeRules(MobileDetect::getOperatingSystems(), static::$additionalOperatingSystems)
             );
         });
+
+        return is_string($platform) ? $platform : null;
     }
 
     /**
@@ -76,11 +80,13 @@ class Agent extends MobileDetect
      */
     public function browser()
     {
-        return $this->retrieveUsingCacheOrResolve('jetstream.browser', function () {
+        $browser = $this->retrieveUsingCacheOrResolve('jetstream.browser', function () {
             return $this->findDetectionRulesAgainstUserAgent(
                 $this->mergeRules(static::$additionalBrowsers, MobileDetect::getBrowsers())
             );
         });
+
+        return is_string($browser) ? $browser : null;
     }
 
     /**
@@ -90,7 +96,7 @@ class Agent extends MobileDetect
      */
     public function isDesktop()
     {
-        return $this->retrieveUsingCacheOrResolve('jetstream.desktop', function () {
+        $desktop = $this->retrieveUsingCacheOrResolve('jetstream.desktop', function () {
             // Check specifically for cloudfront headers if the useragent === 'Amazon CloudFront'
             if (
                 $this->getUserAgent() === static::$cloudFrontUA
@@ -101,24 +107,33 @@ class Agent extends MobileDetect
 
             return ! $this->isMobile() && ! $this->isTablet();
         });
+
+        return is_bool($desktop) ? $desktop : false;
     }
 
     /**
      * Match a detection rule and return the matched key.
      *
+     * @param  array<array-key, mixed>  $rules
      * @return string|null
      */
     protected function findDetectionRulesAgainstUserAgent(array $rules)
     {
-        $userAgent = $this->getUserAgent();
+        $userAgent = $this->getUserAgent() ?? '';
 
         foreach ($rules as $key => $regex) {
-            if (empty($regex)) {
+            if (is_array($regex)) {
+                $regex = implode('|', array_filter($regex, 'is_string'));
+            }
+
+            if (! is_string($regex) || $regex === '') {
                 continue;
             }
 
             if ($this->match($regex, $userAgent)) {
-                return $key ?: reset($this->matchesArray);
+                $matched = is_string($key) && $key !== '' ? $key : reset($this->matchesArray);
+
+                return is_string($matched) && $matched !== '' ? $matched : null;
             }
         }
 
@@ -148,8 +163,8 @@ class Agent extends MobileDetect
     /**
      * Merge multiple rules into one array.
      *
-     * @param  array  $all
-     * @return array<string, string>
+     * @param  array<array-key, mixed>  ...$all
+     * @return array<array-key, mixed>
      */
     protected function mergeRules(...$all)
     {
@@ -161,7 +176,7 @@ class Agent extends MobileDetect
                     $merged[$key] = $value;
                 } elseif (is_array($merged[$key])) {
                     $merged[$key][] = $value;
-                } else {
+                } elseif (is_string($merged[$key]) && is_string($value)) {
                     $merged[$key] .= '|'.$value;
                 }
             }

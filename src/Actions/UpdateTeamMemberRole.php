@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Actions;
 
 use Illuminate\Support\Facades\Gate;
@@ -13,9 +15,9 @@ class UpdateTeamMemberRole
     /**
      * Update the role for the given team member.
      *
-     * @param  mixed  $user
-     * @param  mixed  $team
-     * @param  int  $teamMemberId
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Team  $team
+     * @param  string  $teamMemberId
      * @param  string  $role
      * @return void
      */

@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Contracts\Auth\StatefulGuard;
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\ConfirmPassword;
 
@@ -41,9 +43,11 @@ trait ConfirmsPasswords
         $this->resetErrorBag();
 
         if ($this->passwordIsConfirmed()) {
-            return $this->dispatch('password-confirmed',
+            $this->dispatch('password-confirmed',
                 id: $confirmableId,
             );
+
+            return;
         }
 
         $this->confirmingPassword = true;
@@ -72,7 +76,7 @@ trait ConfirmsPasswords
      */
     public function confirmPassword()
     {
-        if (! app(ConfirmPassword::class)(app(StatefulGuard::class), Auth::user(), $this->confirmablePassword)) {
+        if (! app(ConfirmPassword::class)(app(StatefulGuard::class), Jetstream::currentUser(), $this->confirmablePassword)) {
             throw ValidationException::withMessages([
                 'confirmable_password' => [__('This password does not match our records.')],
             ]);
@@ -95,8 +99,6 @@ trait ConfirmsPasswords
      */
     protected function ensurePasswordIsConfirmed($maximumSecondsSinceConfirmation = null)
     {
-        $maximumSecondsSinceConfirmation = $maximumSecondsSinceConfirmation ?: config('auth.password_timeout', 900);
-
         $this->passwordIsConfirmed($maximumSecondsSinceConfirmation) ? null : abort(403);
     }
 
@@ -108,8 +110,14 @@ trait ConfirmsPasswords
      */
     protected function passwordIsConfirmed($maximumSecondsSinceConfirmation = null)
     {
-        $maximumSecondsSinceConfirmation = $maximumSecondsSinceConfirmation ?: config('auth.password_timeout', 900);
+        if (is_null($maximumSecondsSinceConfirmation)) {
+            $timeout = config('auth.password_timeout', 900);
 
-        return (time() - session('auth.password_confirmed_at', 0)) < $maximumSecondsSinceConfirmation;
+            $maximumSecondsSinceConfirmation = is_int($timeout) ? $timeout : 900;
+        }
+
+        $confirmedAt = session('auth.password_confirmed_at', 0);
+
+        return (time() - (is_int($confirmedAt) ? $confirmedAt : 0)) < $maximumSecondsSinceConfirmation;
     }
 }

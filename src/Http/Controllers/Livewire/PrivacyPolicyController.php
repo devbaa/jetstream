@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Controllers\Livewire;
 
 use Illuminate\Http\Request;
@@ -19,8 +21,10 @@ class PrivacyPolicyController extends Controller
     {
         $policyFile = Jetstream::localizedMarkdownPath('policy.md');
 
+        abort_if(is_null($policyFile), 404);
+
         return view('policy', [
-            'policy' => Str::markdown(file_get_contents($policyFile)),
+            'policy' => Str::markdown((string) file_get_contents($policyFile)),
         ]);
     }
 }

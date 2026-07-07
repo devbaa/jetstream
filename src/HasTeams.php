@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Support\Str;
@@ -10,7 +12,7 @@ trait HasTeams
     /**
      * Determine if the given team is the current team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @return bool
      */
     public function isCurrentTeam($team)
@@ -21,7 +23,7 @@ trait HasTeams
     /**
      * Get the current team of the user's context.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Laravel\Jetstream\Team, $this>
      */
     public function currentTeam()
     {
@@ -35,7 +37,7 @@ trait HasTeams
     /**
      * Switch the user's context to the given team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @return bool
      */
     public function switchTeam($team)
@@ -56,7 +58,7 @@ trait HasTeams
     /**
      * Get all of the teams the user owns or belongs to.
      *
-     * @return \Illuminate\Support\Collection
+     * @return \Illuminate\Support\Collection<int, \Laravel\Jetstream\Team>
      */
     public function allTeams()
     {
@@ -66,7 +68,7 @@ trait HasTeams
     /**
      * Get all of the teams the user owns.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Laravel\Jetstream\Team, $this>
      */
     public function ownedTeams()
     {
@@ -76,7 +78,7 @@ trait HasTeams
     /**
      * Get all of the teams the user belongs to.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Laravel\Jetstream\Team, $this, \Laravel\Jetstream\Membership, 'membership'>
      */
     public function teams()
     {
@@ -89,7 +91,7 @@ trait HasTeams
     /**
      * Get the user's "personal" team.
      *
-     * @return \App\Models\Team
+     * @return \Laravel\Jetstream\Team|null
      */
     public function personalTeam()
     {
@@ -99,7 +101,7 @@ trait HasTeams
     /**
      * Determine if the user owns the given team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @return bool
      */
     public function ownsTeam($team)
@@ -114,7 +116,7 @@ trait HasTeams
     /**
      * Determine if the user belongs to the given team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @return bool
      */
     public function belongsToTeam($team)
@@ -131,7 +133,7 @@ trait HasTeams
     /**
      * Get the role that the user has on the team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @return \Laravel\Jetstream\Role|null
      */
     public function teamRole($team)
@@ -156,7 +158,7 @@ trait HasTeams
     /**
      * Determine if the user has the given role on the given team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @param  string  $role
      * @return bool
      */
@@ -174,7 +176,7 @@ trait HasTeams
     /**
      * Get the user's permissions for the given team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @return array
      */
     public function teamPermissions($team)
@@ -193,7 +195,7 @@ trait HasTeams
     /**
      * Determine if the user has the given permission on the given team.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team|null  $team
      * @param  string  $permission
      * @return bool
      */

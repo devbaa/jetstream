@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tests;
 
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -21,6 +23,19 @@ abstract class OrchestraTestCase extends TestCase
         $features = $app->config->get('jetstream.features', []);
 
         $features[] = Features::teams(['invitations' => true]);
+
+        $app->config->set('jetstream.features', $features);
+    }
+
+    protected function defineHasTenantEnvironment($app, bool $portal = true)
+    {
+        $this->defineHasTeamEnvironment($app);
+
+        $features = $app->config->get('jetstream.features', []);
+
+        $features[] = $portal
+            ? Features::tenants(['portal' => true, 'customer-registration' => true])
+            : Features::tenants();
 
         $app->config->set('jetstream.features', $features);
     }

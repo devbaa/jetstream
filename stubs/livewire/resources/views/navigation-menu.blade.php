@@ -19,6 +19,66 @@
             </div>
 
             <div class="hidden sm:flex sm:items-center sm:ms-6">
+                <!-- Tenants Dropdown -->
+                @if (Laravel\Jetstream\Jetstream::hasTenantFeatures() && Auth::user()->allTenants()->isNotEmpty())
+                    <div class="ms-3 relative">
+                        <x-dropdown align="right" width="60">
+                            <x-slot name="trigger">
+                                <span class="inline-flex rounded-md">
+                                    <button type="button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-700 active:bg-gray-50 dark:active:bg-gray-700 transition ease-in-out duration-150">
+                                        {{ Auth::user()->currentTenant->name ?? __('Select Organization') }}
+
+                                        <svg class="ms-2 -me-0.5 size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+                                        </svg>
+                                    </button>
+                                </span>
+                            </x-slot>
+
+                            <x-slot name="content">
+                                <div class="w-60">
+                                    <!-- Tenant Management -->
+                                    <div class="block px-4 py-2 text-xs text-gray-400">
+                                        {{ __('Manage Organization') }}
+                                    </div>
+
+                                    @if (Auth::user()->currentTenant)
+                                        <!-- Tenant Settings -->
+                                        <x-dropdown-link href="{{ route('tenants.show', Auth::user()->currentTenant->id) }}">
+                                            {{ __('Organization Settings') }}
+                                        </x-dropdown-link>
+
+                                        @can('manageCustomers', Auth::user()->currentTenant)
+                                            <x-dropdown-link href="{{ route('tenant-customers.index', Auth::user()->currentTenant->id) }}">
+                                                {{ __('Customers') }}
+                                            </x-dropdown-link>
+                                        @endcan
+                                    @endif
+
+                                    @can('create', Laravel\Jetstream\Jetstream::newTenantModel())
+                                        <x-dropdown-link href="{{ route('tenants.create') }}">
+                                            {{ __('Create New Organization') }}
+                                        </x-dropdown-link>
+                                    @endcan
+
+                                    <!-- Tenant Switcher -->
+                                    @if (Auth::user()->allTenants()->count() > 1)
+                                        <div class="border-t border-gray-200 dark:border-gray-600"></div>
+
+                                        <div class="block px-4 py-2 text-xs text-gray-400">
+                                            {{ __('Switch Organizations') }}
+                                        </div>
+
+                                        @foreach (Auth::user()->allTenants() as $tenant)
+                                            <x-switchable-tenant :tenant="$tenant" />
+                                        @endforeach
+                                    @endif
+                                </div>
+                            </x-slot>
+                        </x-dropdown>
+                    </div>
+                @endif
+
                 <!-- Teams Dropdown -->
                 @if (Laravel\Jetstream\Jetstream::hasTeamFeatures())
                     <div class="ms-3 relative">
@@ -102,9 +162,33 @@
                                 {{ __('Profile') }}
                             </x-dropdown-link>
 
+                            <x-dropdown-link href="{{ route('help.account') }}">
+                                {{ __('Account Help') }}
+                            </x-dropdown-link>
+
                             @if (Laravel\Jetstream\Jetstream::hasApiFeatures())
                                 <x-dropdown-link href="{{ route('api-tokens.index') }}">
                                     {{ __('API Tokens') }}
+                                </x-dropdown-link>
+                            @endif
+
+                            @if (Laravel\Jetstream\Jetstream::hasCustomerPortalFeatures() && Auth::user()->allCustomerAccounts()->isNotEmpty())
+                                <x-dropdown-link href="{{ route('portal.show') }}">
+                                    {{ __('Customer Portal') }}
+                                </x-dropdown-link>
+                            @endif
+
+                            @if (Laravel\Jetstream\Jetstream::hasTenantFeatures() && Auth::user()->isSystemAdmin())
+                                <x-dropdown-link href="{{ route('admin.tenants.index') }}">
+                                    {{ __('Tenant Administration') }}
+                                </x-dropdown-link>
+
+                                <x-dropdown-link href="{{ route('admin.users.index') }}">
+                                    {{ __('User Administration') }}
+                                </x-dropdown-link>
+
+                                <x-dropdown-link href="{{ route('admin.audit.index') }}">
+                                    {{ __('Audit Log') }}
                                 </x-dropdown-link>
                             @endif
 
@@ -180,6 +264,41 @@
                         {{ __('Log Out') }}
                     </x-responsive-nav-link>
                 </form>
+
+                <!-- Tenant Management -->
+                @if (Laravel\Jetstream\Jetstream::hasTenantFeatures() && Auth::user()->allTenants()->isNotEmpty())
+                    <div class="border-t border-gray-200 dark:border-gray-600"></div>
+
+                    <div class="block px-4 py-2 text-xs text-gray-400">
+                        {{ __('Manage Organization') }}
+                    </div>
+
+                    @if (Auth::user()->currentTenant)
+                        <!-- Tenant Settings -->
+                        <x-responsive-nav-link href="{{ route('tenants.show', Auth::user()->currentTenant->id) }}" :active="request()->routeIs('tenants.show')">
+                            {{ __('Organization Settings') }}
+                        </x-responsive-nav-link>
+                    @endif
+
+                    @can('create', Laravel\Jetstream\Jetstream::newTenantModel())
+                        <x-responsive-nav-link href="{{ route('tenants.create') }}" :active="request()->routeIs('tenants.create')">
+                            {{ __('Create New Organization') }}
+                        </x-responsive-nav-link>
+                    @endcan
+
+                    <!-- Tenant Switcher -->
+                    @if (Auth::user()->allTenants()->count() > 1)
+                        <div class="border-t border-gray-200 dark:border-gray-600"></div>
+
+                        <div class="block px-4 py-2 text-xs text-gray-400">
+                            {{ __('Switch Organizations') }}
+                        </div>
+
+                        @foreach (Auth::user()->allTenants() as $tenant)
+                            <x-switchable-tenant :tenant="$tenant" component="responsive-nav-link" />
+                        @endforeach
+                    @endif
+                @endif
 
                 <!-- Team Management -->
                 @if (Laravel\Jetstream\Jetstream::hasTeamFeatures())

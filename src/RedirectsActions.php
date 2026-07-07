@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 use Illuminate\Http\Response;
@@ -9,19 +11,23 @@ trait RedirectsActions
     /**
      * Get the redirect response for the given action.
      *
-     * @param  mixed  $action
-     * @return \Illuminate\Http\Response
+     * @param  object  $action
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\Response
      */
-    public function redirectPath($action)
+    public function redirectPath(object $action)
     {
         if (method_exists($action, 'redirectTo')) {
             $response = $action->redirectTo();
         } else {
             $response = property_exists($action, 'redirectTo')
                                 ? $action->redirectTo
-                                : config('fortify.home');
+                                : Jetstream::homePath();
         }
 
-        return $response instanceof Response ? $response : redirect($response);
+        if ($response instanceof Response) {
+            return $response;
+        }
+
+        return redirect(is_string($response) ? $response : Jetstream::homePath());
     }
 }

@@ -1,9 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tests;
 
 use App\Actions\Jetstream\CreateTeam;
-use App\Actions\Jetstream\DeleteTeam;
 use App\Actions\Jetstream\DeleteUser;
 use App\Models\Team;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,19 +38,16 @@ class DeleteUserWithTeamsTest extends OrchestraTestCase
         $this->assertSame(2, DB::table('teams')->count());
         $this->assertSame(1, DB::table('team_user')->count());
 
-        copy(__DIR__.'/../stubs/app/Actions/Jetstream/DeleteUserWithTeams.php', $fixture = __DIR__.'/Fixtures/DeleteUser.php');
-
-        require $fixture;
-
-        $action = new DeleteUser(new DeleteTeam);
+        $action = new DeleteUser;
 
         $action->delete($team->owner);
 
-        $this->assertNull($team->owner->fresh());
-        $this->assertSame(1, DB::table('teams')->count());
-        $this->assertSame(0, DB::table('team_user')->count());
-
-        @unlink($fixture);
+        // The user is soft deleted and disappears from queries and member
+        // lists, while their data is retained until the purge command runs.
+        $this->assertTrue($team->owner->fresh()->trashed());
+        $this->assertNull(User::find($team->owner->id));
+        $this->assertSame(2, DB::table('teams')->count());
+        $this->assertCount(0, $otherTeam->fresh()->users);
     }
 
     protected function createTeam()

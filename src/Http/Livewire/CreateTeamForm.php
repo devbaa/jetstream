@@ -1,12 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Contracts\CreatesTeams;
 use Laravel\Jetstream\RedirectsActions;
 use Livewire\Component;
 
+/**
+ * @property-read \App\Models\User $user
+ */
 class CreateTeamForm extends Component
 {
     use RedirectsActions;
@@ -14,7 +19,7 @@ class CreateTeamForm extends Component
     /**
      * The component's state.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     public $state = [];
 
@@ -28,7 +33,7 @@ class CreateTeamForm extends Component
     {
         $this->resetErrorBag();
 
-        $creator->create(Auth::user(), $this->state);
+        $creator->create(Jetstream::currentUser(), $this->state);
 
         return $this->redirectPath($creator);
     }
@@ -40,7 +45,7 @@ class CreateTeamForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

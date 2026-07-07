@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -55,7 +58,7 @@ class LogoutOtherBrowserSessionsForm extends Component
 
         $this->resetErrorBag();
 
-        if (! Hash::check($this->password, Auth::user()->password)) {
+        if (! Hash::check($this->password, Jetstream::currentUser()->password)) {
             throw ValidationException::withMessages([
                 'password' => [__('This password does not match our records.')],
             ]);
@@ -66,7 +69,7 @@ class LogoutOtherBrowserSessionsForm extends Component
         $this->deleteOtherSessionRecords();
 
         request()->session()->put([
-            'password_hash_'.Auth::getDefaultDriver() => Auth::user()->getAuthPassword(),
+            'password_hash_'.Auth::getDefaultDriver() => Jetstream::currentUser()->getAuthPassword(),
         ]);
 
         $this->confirmingLogout = false;
@@ -85,8 +88,8 @@ class LogoutOtherBrowserSessionsForm extends Component
             return;
         }
 
-        DB::connection(config('session.connection'))->table(config('session.table', 'sessions'))
-            ->where('user_id', Auth::user()->getAuthIdentifier())
+        DB::connection(self::sessionConnection())->table(self::sessionTable())
+            ->where('user_id', Jetstream::currentUser()->getAuthIdentifier())
             ->where('id', '!=', request()->session()->getId())
             ->delete();
     }
@@ -94,25 +97,24 @@ class LogoutOtherBrowserSessionsForm extends Component
     /**
      * Get the current sessions.
      *
-     * @return \Illuminate\Support\Collection
+     * @return \Illuminate\Support\Collection<int, object{agent: \Laravel\Jetstream\Agent, ip_address: string|null, is_current_device: bool, last_active: string}&\stdClass>
      */
     public function getSessionsProperty()
     {
-        if (config('session.driver') !== 'database') {
-            return collect();
-        }
-
-        return collect(
-            DB::connection(config('session.connection'))->table(config('session.table', 'sessions'))
-                    ->where('user_id', Auth::user()->getAuthIdentifier())
+        $rows = config('session.driver') === 'database'
+            ? DB::connection(self::sessionConnection())->table(self::sessionTable())
+                    ->where('user_id', Jetstream::currentUser()->getAuthIdentifier())
                     ->orderBy('last_activity', 'desc')
                     ->get()
-        )->map(function ($session) {
+                    ->all()
+            : [];
+
+        return collect($rows)->map(function (\stdClass $session) {
             return (object) [
                 'agent' => $this->createAgent($session),
-                'ip_address' => $session->ip_address,
+                'ip_address' => is_string($session->ip_address) ? $session->ip_address : null,
                 'is_current_device' => $session->id === request()->session()->getId(),
-                'last_active' => Carbon::createFromTimestamp($session->last_activity)->diffForHumans(),
+                'last_active' => Carbon::createFromTimestamp(is_int($session->last_activity) || is_string($session->last_activity) ? $session->last_activity : 0)->diffForHumans(),
             ];
         });
     }
@@ -120,12 +122,14 @@ class LogoutOtherBrowserSessionsForm extends Component
     /**
      * Create a new agent instance from the given session.
      *
-     * @param  mixed  $session
+     * @param  \stdClass  $session
      * @return \Laravel\Jetstream\Agent
      */
     protected function createAgent($session)
     {
-        return tap(new Agent(), fn ($agent) => $agent->setUserAgent($session->user_agent));
+        return tap(new Agent(), function (Agent $agent) use ($session): void {
+            $agent->setUserAgent(is_string($session->user_agent) ? $session->user_agent : '');
+        });
     }
 
     /**
@@ -136,5 +140,25 @@ class LogoutOtherBrowserSessionsForm extends Component
     public function render()
     {
         return view('profile.logout-other-browser-sessions-form');
+    }
+
+    /**
+     * Get the configured session database connection name.
+     */
+    protected static function sessionConnection(): ?string
+    {
+        $connection = config('session.connection');
+
+        return is_string($connection) ? $connection : null;
+    }
+
+    /**
+     * Get the configured session table name.
+     */
+    protected static function sessionTable(): string
+    {
+        $table = config('session.table', 'sessions');
+
+        return is_string($table) ? $table : 'sessions';
     }
 }
