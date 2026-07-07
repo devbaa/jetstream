@@ -9,6 +9,16 @@ of every feature below.
 
 ### Added
 
+- **Domain admin mode** — an opt-in feature (`Features::domainAdmin()`,
+  optionally `['multi-domain' => true]`) letting users prove authority over
+  an email domain via a DNS TXT record or home page meta tag and manage the
+  verified users of that domain (block/unblock). Every claim carries a
+  globally unique verification token; the most recent successful
+  verification holds the domain admin flag and supersedes earlier claims,
+  whose recorded activity is kept as a separate historic tree until a
+  system administrator purges it with `jetstream:purge --domain-history`.
+  Single mode restricts claims to the user's own email domain; multi mode
+  allows additional domains.
 - **Multi-tenant architecture** — a `Tenant` model alongside teams, automatic
   query scoping via a tenant context (`BelongsToTenant`, `TenantScope`,
   `TenantContext` with `bypass()` / `runFor()`), tenant switching, staff

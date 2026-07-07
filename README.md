@@ -22,6 +22,7 @@ This fork does **not** track upstream Jetstream releases; it is a self-contained
   - [Passkeys](#passkeys)
   - [Account recovery — recovery email & phone](#account-recovery--recovery-email--phone)
 - [Blocking & freezing](#blocking--freezing)
+- [Domain admin mode](#domain-admin-mode)
 - [Compliance & operations](#compliance--operations)
   - [Universal audit log](#universal-audit-log)
   - [Soft deletes & the purge command](#soft-deletes--the-purge-command)
@@ -280,6 +281,20 @@ Two independent moderation levers:
 
 ---
 
+## Domain admin mode
+
+An opt-in feature (`Features::domainAdmin()`) that lets a user prove authority over an email domain and manage the application's **verified** users whose email addresses belong to it — useful when a company wants to police its own `@company.com` accounts without involving your system administrators.
+
+**Claiming a domain.** Any user with a verified email may start a claim from `/user/domains`. Each claim gets its own **globally unique verification token**, published either as a DNS TXT record (`jetstream-domain-verification=<token>`) or as a `<meta name="jetstream-domain-verification">` tag on the domain's home page. "Check verification" looks the token up (DNS first, then meta) via the pluggable `VerifiesDomains` service.
+
+**Single vs. multi domain.** In single mode (the default) a user may only claim the domain part of their own email address. With `Features::domainAdmin(['multi-domain' => true])` they may claim additional domains too.
+
+**The flag moves — history stays.** Any number of users can hold claims for the same domain, but only the claim whose verification succeeded **most recently** holds the domain admin flag; verifying supersedes every other verified claim (`DomainClaimVerified` / `DomainClaimSuperseded` events). Every action a domain admin takes is recorded as domain activity **under the claim it happened under**, so when the flag moves the previous admin's activity survives as a separate, historic tree. A system administrator can erase those historic trees on demand with `php artisan jetstream:purge --domain-history`.
+
+**What a domain admin can do.** List the verified users of their domain and block/unblock them (same `blocked_at` mechanics as `/admin/users`). Only verified accounts participate on both sides: unverified users are invisible to domain admins, and system administrators, the admin themselves, and users of other domains can never be managed.
+
+---
+
 ## Compliance & operations
 
 ### Universal audit log
@@ -386,6 +401,7 @@ Both are published as editable Blade views (`resources/views/help/*.blade.php`) 
     // Features::api(),
     // Features::teams(['invitations' => true]),
     // Features::tenants(['portal' => true, 'customer-registration' => true]),
+    // Features::domainAdmin(['multi-domain' => true]),
     Features::accountDeletion(),
     Features::dataPrivacy(),      // Data & Privacy profile section
     Features::accountRecovery(),  // recovery email + phone
@@ -434,7 +450,11 @@ Jetstream::createTenantsUsing(App\Actions\Jetstream\CreateTenant::class);
 Jetstream::inviteCustomersUsing(App\Actions\Jetstream\InviteCustomer::class);
 // ... full create/update/add/remove/delete registrars for tenants & customers
 
+Jetstream::useDomainClaimModel(App\Models\DomainClaim::class);
+Jetstream::useDomainActivityModel(App\Models\DomainActivity::class);
+
 Jetstream::verifyPhonesUsing(App\Sms\YourPhoneVerifier::class);
+Jetstream::verifyDomainsUsing(App\Domains\YourDomainVerifier::class);
 Jetstream::bypassThrottlingUsing(fn ($request) => /* bool */);
 ```
 
@@ -456,8 +476,10 @@ Key tables (all UUID v7 keys, all foreign keys indexed):
 | `customer_invitations` | `tenant_id`, `customer_account_id` (nullable), `email` |
 | `audit_logs` | `tenant_id`, `user_id`, `event`, `auditable` (uuid morph), `old_values`/`new_values`, `ip_address`, `user_agent` |
 | `data_requests` | `user_id`, `type`, `status`, `process_after`, provenance columns |
+| `domain_claims` | `user_id`, `domain`, `token` (unique), `method`, `verified_at`, `superseded_at`, unique `(domain, user_id)` |
+| `domain_activities` | `domain_claim_id`, `user_id` (actor), `subject_id`, `action`, `details` (json) |
 
-Migrations are published under the `jetstream-tenant-migrations` and `jetstream-compliance-migrations` tags.
+Migrations are published under the `jetstream-tenant-migrations`, `jetstream-compliance-migrations`, and `jetstream-domain-migrations` tags.
 
 ---
 
