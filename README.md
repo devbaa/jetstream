@@ -293,6 +293,21 @@ An opt-in feature (`Features::domainAdmin()`) that lets a user prove authority o
 
 **What a domain admin can do.** List the verified users of their domain and block/unblock them (same `blocked_at` mechanics as `/admin/users`). Only verified accounts participate on both sides: unverified users are invisible to domain admins, and system administrators, the admin themselves, and users of other domains can never be managed.
 
+**Automatic team enrollment.** When the teams feature is enabled, every verified user of a mastered domain is added directly into the domain master's personal team — existing users are swept in the moment a claim is verified, and future users are enrolled as soon as they verify their email. Enrollments are recorded as domain activity under the claim; system administrators and the master themselves are never auto-enrolled, and existing memberships are left untouched.
+
+**Creating users (system admin or CLI).** System administrators can create accounts from `/admin/users` ("New User"), and the CLI ships:
+
+```bash
+php artisan jetstream:create-user jane@acme.com \
+    --name="Jane Doe" \
+    --password=secret        # optional: omit to email a password setup link
+    --master                 # domain master of her own email domain
+    --master-domain=acme.dev # extra domains (multi-domain mode only)
+    --skip-reset-mail        # don't send the setup link when no password is given
+```
+
+Created accounts are **pre-verified**, get a personal team, and are enrolled into their domain master's team like any other verified user. With `--master` (or the admin-screen checkbox) the account is granted the domain admin flag directly — method `admin`, no DNS/meta check — superseding earlier claims just like a normal verification. If a password is set it is used; otherwise a password setup (reset) link is emailed unless `--skip-reset-mail` is passed.
+
 ---
 
 ## Compliance & operations

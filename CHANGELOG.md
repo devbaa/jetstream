@@ -18,7 +18,16 @@ of every feature below.
   whose recorded activity is kept as a separate historic tree until a
   system administrator purges it with `jetstream:purge --domain-history`.
   Single mode restricts claims to the user's own email domain; multi mode
-  allows additional domains.
+  allows additional domains. With teams enabled, verified users of a
+  mastered domain are enrolled directly into the domain master's personal
+  team — at verification time and whenever a user later verifies their
+  email.
+- **Admin & CLI user creation** — system administrators can create
+  pre-verified accounts from `/admin/users`, and the
+  `jetstream:create-user` command does the same from the CLI, optionally
+  granting domain mastership (`--master`, `--master-domain=`). A provided
+  password is used as-is; without one a password setup (reset) link is
+  emailed unless skipped (`--skip-reset-mail`).
 - **Multi-tenant architecture** — a `Tenant` model alongside teams, automatic
   query scoping via a tenant context (`BelongsToTenant`, `TenantScope`,
   `TenantContext` with `bypass()` / `runFor()`), tenant switching, staff
