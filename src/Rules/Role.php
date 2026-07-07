@@ -1,9 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Rules;
 
 use Illuminate\Contracts\Validation\Rule;
+use Laravel\Jetstream\Features;
 use Laravel\Jetstream\Jetstream;
+use Laravel\Jetstream\RoleRegistry;
+use Laravel\Jetstream\Tenancy\TenantContext;
 
 class Role implements Rule
 {
@@ -16,6 +21,16 @@ class Role implements Rule
      */
     public function passes($attribute, $value)
     {
+        if (! is_string($value)) {
+            return false;
+        }
+
+        if (Features::hasTenantFeatures()) {
+            return ! is_null(app(RoleRegistry::class)->find(
+                $value, app(TenantContext::class)->currentId()
+            ));
+        }
+
         return in_array($value, array_keys(Jetstream::$roles));
     }
 

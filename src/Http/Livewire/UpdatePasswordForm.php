@@ -1,17 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Laravel\Fortify\Contracts\UpdatesUserPasswords;
 use Livewire\Component;
 
+/**
+ * @property-read \App\Models\User $user
+ */
 class UpdatePasswordForm extends Component
 {
     /**
      * The component's state.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     public $state = [
         'current_password' => '',
@@ -29,11 +35,11 @@ class UpdatePasswordForm extends Component
     {
         $this->resetErrorBag();
 
-        $updater->update(Auth::user(), $this->state);
+        $updater->update(Jetstream::currentUser(), $this->state);
 
         if (request()->hasSession()) {
             request()->session()->put([
-                'password_hash_'.Auth::getDefaultDriver() => Auth::user()->getAuthPassword(),
+                'password_hash_'.Auth::getDefaultDriver() => Jetstream::currentUser()->getAuthPassword(),
             ]);
         }
 
@@ -53,7 +59,7 @@ class UpdatePasswordForm extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

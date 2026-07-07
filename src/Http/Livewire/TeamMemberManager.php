@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
 use Laravel\Jetstream\Actions\UpdateTeamMemberRole;
 use Laravel\Jetstream\Contracts\AddsTeamMembers;
 use Laravel\Jetstream\Contracts\InvitesTeamMembers;
@@ -10,14 +11,18 @@ use Laravel\Jetstream\Contracts\RemovesTeamMembers;
 use Laravel\Jetstream\Features;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Role;
+use Laravel\Jetstream\RoleRegistry;
 use Livewire\Component;
 
+/**
+ * @property-read \App\Models\User $user
+ */
 class TeamMemberManager extends Component
 {
     /**
      * The team instance.
      *
-     * @var mixed
+     * @var \Laravel\Jetstream\Team
      */
     public $team;
 
@@ -31,14 +36,14 @@ class TeamMemberManager extends Component
     /**
      * The user that is having their role managed.
      *
-     * @var mixed
+     * @var \App\Models\User|null
      */
     public $managingRoleFor;
 
     /**
      * The current role for the user that is having their role managed.
      *
-     * @var string
+     * @var string|null
      */
     public $currentRole;
 
@@ -59,14 +64,14 @@ class TeamMemberManager extends Component
     /**
      * The ID of the team member being removed.
      *
-     * @var int|null
+     * @var string|null
      */
     public $teamMemberIdBeingRemoved = null;
 
     /**
      * The "add team member" form state.
      *
-     * @var array
+     * @var array{email: string, role: string|null}
      */
     public $addTeamMemberForm = [
         'email' => '',
@@ -76,7 +81,7 @@ class TeamMemberManager extends Component
     /**
      * Mount the component.
      *
-     * @param  mixed  $team
+     * @param  \Laravel\Jetstream\Team  $team
      * @return void
      */
     public function mount($team)
@@ -114,7 +119,7 @@ class TeamMemberManager extends Component
             'role' => null,
         ];
 
-        $this->team = $this->team->fresh();
+        $this->team->refresh();
 
         $this->dispatch('saved');
     }
@@ -122,7 +127,7 @@ class TeamMemberManager extends Component
     /**
      * Cancel a pending team member invitation.
      *
-     * @param  int  $invitationId
+     * @param  string  $invitationId
      * @return void
      */
     public function cancelTeamInvitation($invitationId)
@@ -137,20 +142,20 @@ class TeamMemberManager extends Component
                 ->delete();
         }
 
-        $this->team = $this->team->fresh();
+        $this->team->refresh();
     }
 
     /**
      * Allow the given user's role to be managed.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function manageRole($userId)
     {
         $this->currentlyManagingRole = true;
         $this->managingRoleFor = Jetstream::findUserByIdOrFail($userId);
-        $this->currentRole = $this->managingRoleFor->teamRole($this->team)->key;
+        $this->currentRole = $this->managingRoleFor->teamRole($this->team)?->key;
     }
 
     /**
@@ -161,14 +166,16 @@ class TeamMemberManager extends Component
      */
     public function updateRole(UpdateTeamMemberRole $updater)
     {
+        abort_if(is_null($this->managingRoleFor), 403);
+
         $updater->update(
             $this->user,
             $this->team,
             $this->managingRoleFor->id,
-            $this->currentRole
+            $this->currentRole ?? ''
         );
 
-        $this->team = $this->team->fresh();
+        $this->team->refresh();
 
         $this->stopManagingRole();
     }
@@ -199,15 +206,15 @@ class TeamMemberManager extends Component
 
         $this->confirmingLeavingTeam = false;
 
-        $this->team = $this->team->fresh();
+        $this->team->refresh();
 
-        return redirect(config('fortify.home'));
+        return redirect(Jetstream::homePath());
     }
 
     /**
      * Confirm that the given team member should be removed.
      *
-     * @param  int  $userId
+     * @param  string  $userId
      * @return void
      */
     public function confirmTeamMemberRemoval($userId)
@@ -225,6 +232,8 @@ class TeamMemberManager extends Component
      */
     public function removeTeamMember(RemovesTeamMembers $remover)
     {
+        abort_if(is_null($this->teamMemberIdBeingRemoved), 403);
+
         $remover->remove(
             $this->user,
             $this->team,
@@ -235,7 +244,7 @@ class TeamMemberManager extends Component
 
         $this->teamMemberIdBeingRemoved = null;
 
-        $this->team = $this->team->fresh();
+        $this->team->refresh();
     }
 
     /**
@@ -245,25 +254,30 @@ class TeamMemberManager extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**
      * Get the available team member roles.
      *
-     * @return array
+     * @return list<\Laravel\Jetstream\Role>
      */
     public function getRolesProperty()
     {
-        return collect(Jetstream::$roles)->transform(function ($role) {
-            return with($role->jsonSerialize(), function ($data) {
-                return (new Role(
-                    $data['key'],
-                    $data['name'],
-                    $data['permissions']
-                ))->description($data['description']);
-            });
-        })->values()->all();
+        $roles = Features::hasTenantFeatures()
+                    ? app(RoleRegistry::class)->all($this->team->tenant_id)
+                    : Jetstream::$roles;
+
+        return array_values(collect($roles)->map(function (Role $role): Role {
+            $name = __($role->name);
+            $description = __($role->description ?? '');
+
+            return (new Role(
+                $role->key,
+                is_string($name) ? $name : $role->name,
+                $role->permissions
+            ))->description(is_string($description) ? $description : '');
+        })->all());
     }
 
     /**

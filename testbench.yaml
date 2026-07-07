@@ -6,6 +6,7 @@ providers:
 migrations:
   - database/migrations
   - vendor/laravel/fortify/database/migrations
+  - vendor/laravel/passkeys/database/migrations
 
 workbench:
   install: false

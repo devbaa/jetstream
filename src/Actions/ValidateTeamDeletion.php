@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Actions;
 
 use Illuminate\Support\Facades\Gate;
@@ -10,8 +12,8 @@ class ValidateTeamDeletion
     /**
      * Validate that the team can be deleted by the given user.
      *
-     * @param  mixed  $user
-     * @param  mixed  $team
+     * @param  \Illuminate\Foundation\Auth\User  $user
+     * @param  \Laravel\Jetstream\Team  $team
      * @return void
      */
     public function validate($user, $team)

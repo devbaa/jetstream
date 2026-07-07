@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Middleware;
 
 use Illuminate\Contracts\Auth\StatefulGuard;

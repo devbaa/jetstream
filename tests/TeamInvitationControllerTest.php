@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Tests;
 
 use App\Actions\Jetstream\CreateTeam;
@@ -10,16 +12,15 @@ use Laravel\Jetstream\Contracts\AddsTeamMembers;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Tests\Fixtures\TeamPolicy;
 use Laravel\Jetstream\Tests\Fixtures\User;
-use Orchestra\Testbench\Attributes\WithConfig;
 
-#[WithConfig('jetstream.stack', 'inertia')]
-#[WithConfig('jetstream.features', ['teams'])]
 class TeamInvitationControllerTest extends OrchestraTestCase
 {
     /** {@inheritdoc} */
     #[\Override]
     protected function defineEnvironment($app)
     {
+        $this->defineHasTeamEnvironment($app);
+
         Gate::policy(Team::class, TeamPolicy::class);
         Jetstream::useUserModel(User::class);
     }

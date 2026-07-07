@@ -1,18 +1,22 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
+/**
+ * @property-read \App\Models\User $user
+ */
 class ApiTokenManager extends Component
 {
     /**
      * The create API token form state.
      *
-     * @var array
+     * @var array{name: string, permissions: list<string>}
      */
     public $createApiTokenForm = [
         'name' => '',
@@ -50,7 +54,7 @@ class ApiTokenManager extends Component
     /**
      * The update API token form state.
      *
-     * @var array
+     * @var array{permissions: list<string>}
      */
     public $updateApiTokenForm = [
         'permissions' => [],
@@ -135,7 +139,11 @@ class ApiTokenManager extends Component
             'id', $tokenId
         )->firstOrFail();
 
-        $this->updateApiTokenForm['permissions'] = $this->managingPermissionsFor->abilities;
+        $abilities = $this->managingPermissionsFor->abilities;
+
+        $this->updateApiTokenForm['permissions'] = is_array($abilities)
+            ? array_values(array_filter($abilities, 'is_string'))
+            : [];
     }
 
     /**
@@ -145,6 +153,8 @@ class ApiTokenManager extends Component
      */
     public function updateApiToken()
     {
+        abort_if(is_null($this->managingPermissionsFor), 403);
+
         $this->managingPermissionsFor->forceFill([
             'abilities' => Jetstream::validPermissions($this->updateApiTokenForm['permissions']),
         ])->save();
@@ -172,7 +182,7 @@ class ApiTokenManager extends Component
      */
     public function deleteApiToken()
     {
-        $this->user->tokens()->where('id', $this->apiTokenIdBeingDeleted)->first()->delete();
+        $this->user->tokens()->where('id', $this->apiTokenIdBeingDeleted)->firstOrFail()->delete();
 
         $this->user->load('tokens');
 
@@ -188,7 +198,7 @@ class ApiTokenManager extends Component
      */
     public function getUserProperty()
     {
-        return Auth::user();
+        return Jetstream::currentUser();
     }
 
     /**

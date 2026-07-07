@@ -1,6 +1,96 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/jetstream/compare/v5.5.3...5.x)
+## Jetstream SaaS fork (unreleased)
+
+This fork diverges from upstream Laravel Jetstream after v5.5.3 and rebuilds
+the package as a Livewire-only, multi-tenant SaaS starter. The Inertia stack
+has been removed entirely. See the [README](README.md) for full documentation
+of every feature below.
+
+### Added
+
+- **Domain admin mode** — an opt-in feature (`Features::domainAdmin()`,
+  optionally `['multi-domain' => true]`) letting users prove authority over
+  an email domain via a DNS TXT record or home page meta tag and manage the
+  verified users of that domain (block/unblock). Every claim carries a
+  globally unique verification token; the most recent successful
+  verification holds the domain admin flag and supersedes earlier claims,
+  whose recorded activity is kept as a separate historic tree until a
+  system administrator purges it with `jetstream:purge --domain-history`.
+  Single mode restricts claims to the user's own email domain; multi mode
+  allows additional domains. With teams enabled, verified users of a
+  mastered domain are enrolled directly into the domain master's personal
+  team — at verification time and whenever a user later verifies their
+  email.
+- **Admin & CLI user creation** — system administrators can create
+  pre-verified accounts from `/admin/users`, and the
+  `jetstream:create-user` command does the same from the CLI, optionally
+  granting domain mastership (`--master`, `--master-domain=`). A provided
+  password is used as-is; without one a password setup (reset) link is
+  emailed unless skipped (`--skip-reset-mail`).
+- **Multi-tenant architecture** — a `Tenant` model alongside teams, automatic
+  query scoping via a tenant context (`BelongsToTenant`, `TenantScope`,
+  `TenantContext` with `bypass()` / `runFor()`), tenant switching, staff
+  management, and slug-based tenant identification.
+- **Database-backed roles & permissions** — tenant-scoped roles stored in a
+  `roles` table with a JSON permission catalog, a reserved `OWNER` role,
+  static-role fallback, and a role management screen for tenant owners.
+- **Customer portal** — a third actor besides staff and admins: customer
+  accounts with members, portal routes under `/portal`, invitation-based and
+  (per-tenant, opt-in) self-service customer registration, and independent
+  staff/customer context resolution for the same user.
+- **Passkey (WebAuthn) support** — passkey registration, management, and
+  login built on Fortify's passkey feature.
+- **Universal audit log** — every `Auditable` model records create, update,
+  delete, and restore events with the acting user, tenant, IP address, and
+  user agent; authentication events (login, logout, failed, password reset,
+  registration) are recorded as well, with a per-tenant and system-wide
+  audit log viewer.
+- **Soft deletes & purge** — users, tenants, teams, and customer accounts are
+  soft deleted, then permanently erased by the `jetstream:purge` command
+  after a configurable retention period, including owned resources and
+  audit-trail identity.
+- **Data rights (GDPR / CCPA / KVKK)** — self-service personal data export
+  and account deletion requests with a grace period, cancellation, and
+  processing via `jetstream:purge`.
+- **Account recovery** — verified recovery email (signed-link verification)
+  and recovery phone with enumeration-resistant reset-link issuance.
+- **Country-coded phone verification** — E.164 normalization with hashed,
+  expiring six-digit verification codes.
+- **Blocking & freezing** — administrators can block users (with a reason)
+  and freeze tenants or customer accounts; frozen tenants become inaccessible
+  to their staff and customers, and individual staff members can be frozen
+  per tenant.
+- **Admin screens** — system administrators manage users (block/unblock,
+  reset two-factor authentication and passkeys) and tenants (create, delete,
+  freeze, toggle customer self-registration) under `/admin`.
+- **Structured names** — first, middle, and last name columns with a
+  composed full-name accessor.
+- **UUID v7 primary keys** — all primary keys are time-ordered UUIDs,
+  preventing enumeration.
+- **Registration honeypot** — a `prohibited` honeypot field on user and
+  customer registration.
+- **Throttling with bypass** — per-user and per-IP rate limiters on
+  Jetstream routes with bypass for system administrators, configured IPs,
+  and a user-defined callback.
+- **In-app help center** — account and tenant help pages rendered from
+  shipped views and linked from the profile and tenant screens.
+- **Database indexes** — indexes for hot-path and background queries
+  (recovery email lookups, pivot lookups, data-request processing).
+
+### Changed
+
+- **Livewire is the only supported stack** — the Inertia/Vue stack, its
+  scaffolding, and related configuration have been removed.
+- **Laravel 13 / PHP 8.4 floor** with strict types throughout and static
+  analysis at Larastan's maximum level.
+- Teams remain available and now coexist with (and nest under) tenants.
+
+### Upstream
+
+The entries below are the upstream Laravel Jetstream release notes. This
+fork's history begins after v5.5.3; upstream changes made after that release
+are not incorporated here.
 
 ## [v5.5.3](https://github.com/laravel/jetstream/compare/v5.5.2...v5.5.3) - 2026-05-19
 

@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Laravel\Jetstream\Jetstream;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Contracts\DeletesUsers;
@@ -54,13 +56,15 @@ class DeleteUserForm extends Component
     {
         $this->resetErrorBag();
 
-        if (! Hash::check($this->password, Auth::user()->password)) {
+        $user = Jetstream::currentUser();
+
+        if (! Hash::check($this->password, $user->password)) {
             throw ValidationException::withMessages([
                 'password' => [__('This password does not match our records.')],
             ]);
         }
 
-        $deleter->delete(Auth::user()->fresh());
+        $deleter->delete($user->fresh() ?? $user);
 
         $auth->logout();
 
@@ -69,7 +73,9 @@ class DeleteUserForm extends Component
             $request->session()->regenerateToken();
         }
 
-        return redirect(config('fortify.redirects.logout') ?? '/');
+        $logout = config('fortify.redirects.logout');
+
+        return redirect(is_string($logout) ? $logout : '/');
     }
 
     /**

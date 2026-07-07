@@ -7,6 +7,11 @@
 
     <div>
         <div class="max-w-7xl mx-auto py-10 sm:px-6 lg:px-8">
+            <div class="mb-6 text-sm text-gray-600 dark:text-gray-400">
+                {{ __('Need help with sign-in, recovery, privacy, or deleting your account?') }}
+                <a href="{{ route('help.account') }}" class="underline text-gray-900 dark:text-gray-100">{{ __('Visit Account Help') }}</a>.
+            </div>
+
             @if (Laravel\Fortify\Features::canUpdateProfileInformation())
                 @livewire('profile.update-profile-information-form')
 
@@ -29,9 +34,33 @@
                 <x-section-border />
             @endif
 
+            @if (Laravel\Fortify\Features::canManagePasskeys())
+                <div class="mt-10 sm:mt-0">
+                    @livewire('profile.passkey-manager')
+                </div>
+
+                <x-section-border />
+            @endif
+
+            @if (Laravel\Jetstream\Jetstream::hasAccountRecoveryFeatures())
+                <div class="mt-10 sm:mt-0">
+                    @livewire('profile.update-recovery-channels-form')
+                </div>
+
+                <x-section-border />
+            @endif
+
             <div class="mt-10 sm:mt-0">
                 @livewire('profile.logout-other-browser-sessions-form')
             </div>
+
+            @if (Laravel\Jetstream\Jetstream::hasDataPrivacyFeatures())
+                <x-section-border />
+
+                <div class="mt-10 sm:mt-0">
+                    @livewire('profile.data-privacy-form')
+                </div>
+            @endif
 
             @if (Laravel\Jetstream\Jetstream::hasAccountDeletionFeatures())
                 <x-section-border />

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Laravel\Jetstream;
 
 class Features
@@ -12,7 +14,9 @@ class Features
      */
     public static function enabled(string $feature)
     {
-        return in_array($feature, config('jetstream.features', []));
+        $features = config('jetstream.features', []);
+
+        return is_array($features) && in_array($feature, $features);
     }
 
     /**
@@ -69,6 +73,56 @@ class Features
     }
 
     /**
+     * Determine if the application is using any tenant features.
+     *
+     * @return bool
+     */
+    public static function hasTenantFeatures()
+    {
+        return static::enabled(static::tenants());
+    }
+
+    /**
+     * Determine if the application is serving a customer portal.
+     *
+     * @return bool
+     */
+    public static function hasCustomerPortalFeatures()
+    {
+        return static::optionEnabled(static::tenants(), 'portal');
+    }
+
+    /**
+     * Determine if tenants may allow customers to self-register.
+     *
+     * @return bool
+     */
+    public static function allowsCustomerRegistration()
+    {
+        return static::optionEnabled(static::tenants(), 'customer-registration');
+    }
+
+    /**
+     * Determine if the application lets users exercise their data rights.
+     *
+     * @return bool
+     */
+    public static function hasDataPrivacyFeatures()
+    {
+        return static::enabled(static::dataPrivacy());
+    }
+
+    /**
+     * Determine if the application supports account recovery channels.
+     *
+     * @return bool
+     */
+    public static function hasAccountRecoveryFeatures()
+    {
+        return static::enabled(static::accountRecovery());
+    }
+
+    /**
      * Determine if the application has terms of service / privacy policy confirmation enabled.
      *
      * @return bool
@@ -111,7 +165,7 @@ class Features
     /**
      * Enable the teams feature.
      *
-     * @param  array  $options
+     * @param  array<string, bool>  $options
      * @return string
      */
     public static function teams(array $options = [])
@@ -121,6 +175,21 @@ class Features
         }
 
         return 'teams';
+    }
+
+    /**
+     * Enable the multi-tenant SaaS feature.
+     *
+     * @param  array<string, bool>  $options
+     * @return string
+     */
+    public static function tenants(array $options = [])
+    {
+        if (! empty($options)) {
+            config(['jetstream-options.tenants' => $options]);
+        }
+
+        return 'tenants';
     }
 
     /**
@@ -141,5 +210,60 @@ class Features
     public static function accountDeletion()
     {
         return 'account-deletion';
+    }
+
+    /**
+     * Enable the data privacy feature (data export and deletion requests).
+     *
+     * @return string
+     */
+    public static function dataPrivacy()
+    {
+        return 'data-privacy';
+    }
+
+    /**
+     * Enable the account recovery feature (phone and recovery email).
+     *
+     * @return string
+     */
+    public static function accountRecovery()
+    {
+        return 'account-recovery';
+    }
+
+    /**
+     * Determine if the application is using the domain admin feature.
+     *
+     * @return bool
+     */
+    public static function hasDomainAdminFeatures()
+    {
+        return static::enabled(static::domainAdmin());
+    }
+
+    /**
+     * Determine if domain admins may claim domains beyond their own email domain.
+     *
+     * @return bool
+     */
+    public static function allowsMultipleDomains()
+    {
+        return static::optionEnabled(static::domainAdmin(), 'multi-domain');
+    }
+
+    /**
+     * Enable the domain admin feature.
+     *
+     * @param  array<string, bool>  $options
+     * @return string
+     */
+    public static function domainAdmin(array $options = [])
+    {
+        if (! empty($options)) {
+            config(['jetstream-options.domain-admin' => $options]);
+        }
+
+        return 'domain-admin';
     }
 }
