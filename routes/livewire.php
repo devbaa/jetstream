@@ -13,6 +13,7 @@ use Laravel\Jetstream\Http\Controllers\Livewire\AdminTenantController;
 use Laravel\Jetstream\Http\Controllers\Livewire\AdminUserController;
 use Laravel\Jetstream\Http\Controllers\Livewire\ApiTokenController;
 use Laravel\Jetstream\Http\Controllers\Livewire\CustomerRegistrationController;
+use Laravel\Jetstream\Http\Controllers\Livewire\DomainAdminController;
 use Laravel\Jetstream\Http\Controllers\Livewire\HelpController;
 use Laravel\Jetstream\Http\Controllers\Livewire\PortalController;
 use Laravel\Jetstream\Http\Controllers\Livewire\PrivacyPolicyController;
@@ -56,6 +57,11 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
             // API...
             if (Jetstream::hasApiFeatures()) {
                 Route::get('/user/api-tokens', [ApiTokenController::class, 'index'])->name('api-tokens.index');
+            }
+
+            // Domain Administration...
+            if (Jetstream::hasDomainAdminFeatures()) {
+                Route::get('/user/domains', [DomainAdminController::class, 'show'])->name('domains.show');
             }
 
             // Teams...

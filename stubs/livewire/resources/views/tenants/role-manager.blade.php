@@ -41,7 +41,7 @@
 
                                 @if (array_key_exists($role->key, $this->customRoleKeys))
                                     <button class="cursor-pointer ms-4 text-sm text-red-500 focus:outline-none"
-                                            wire:click="confirmRoleDeletion({{ $this->customRoleKeys[$role->key] }})">
+                                            wire:click="confirmRoleDeletion('{{ $this->customRoleKeys[$role->key] }}')">
                                         {{ __('Delete') }}
                                     </button>
                                 @endif

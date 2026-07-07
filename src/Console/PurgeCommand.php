@@ -28,6 +28,7 @@ class PurgeCommand extends Command
      */
     protected $signature = 'jetstream:purge
                             {--days= : Override the configured retention period in days}
+                            {--domain-history : Also permanently erase superseded domain claims and their recorded activity}
                             {--force : Force the operation to run when in production}';
 
     /**
@@ -54,6 +55,7 @@ class PurgeCommand extends Command
             $this->purgeTrashedTenants($cutoff);
             $this->purgeTrashedTeams($cutoff);
             $this->purgeTrashedCustomerAccounts($cutoff);
+            $this->purgeDomainHistory();
             $this->pruneAuditLogs();
         });
 
@@ -148,6 +150,20 @@ class PurgeCommand extends Command
 
             $user->ownedTeams()->withTrashed()->get()->each->purge();
 
+            if (Schema::hasTable('domain_claims')) {
+                foreach ($user->domainClaims()->get() as $claim) {
+                    $claim->activities()->delete();
+
+                    $claim->delete();
+                }
+
+                // Anonymize the historic activity other domain admins
+                // recorded about the user...
+                Jetstream::newDomainActivityModel()->newQuery()
+                    ->where('subject_id', $user->id)
+                    ->update(['subject_id' => null]);
+            }
+
             if (Schema::hasTable('data_requests')) {
                 Jetstream::newDataRequestModel()->newQuery()
                     ->where('user_id', $user->id)
@@ -231,6 +247,35 @@ class PurgeCommand extends Command
         $accounts->each->purge();
 
         $this->components->info(sprintf('Purged %d customer account(s).', $accounts->count()));
+    }
+
+    /**
+     * Permanently erase the historic domain admin trees.
+     *
+     * Superseded domain claims — and the activity recorded under them —
+     * are kept as history when the domain admin flag moves to a newer
+     * verification. They are only erased when a system administrator
+     * explicitly asks for it with the --domain-history option.
+     */
+    protected function purgeDomainHistory(): void
+    {
+        if (! $this->option('domain-history') || ! Schema::hasTable('domain_claims')) {
+            return;
+        }
+
+        $claims = Jetstream::newDomainClaimModel()->newQuery()
+            ->superseded()
+            ->get();
+
+        $count = $claims->count();
+
+        foreach ($claims as $claim) {
+            $claim->activities()->delete();
+
+            $claim->delete();
+        }
+
+        $this->components->info(sprintf('Purged %d superseded domain claim(s) and their activity.', $count));
     }
 
     /**

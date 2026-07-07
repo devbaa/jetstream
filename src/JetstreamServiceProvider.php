@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,8 @@ use Illuminate\Support\ServiceProvider;
 use Laravel\Fortify\Features as FortifyFeatures;
 use Laravel\Fortify\Fortify;
 use Laravel\Jetstream\Audit\AuthenticationEventSubscriber;
+use Laravel\Jetstream\Contracts\VerifiesDomains;
+use Laravel\Jetstream\Domains\VerifyDomainViaDnsOrMeta;
 use Laravel\Jetstream\Http\Livewire\Admin\TenantManager as AdminTenantManager;
 use Laravel\Jetstream\Http\Livewire\Admin\UserManager as AdminUserManager;
 use Laravel\Jetstream\Http\Livewire\ApiTokenManager;
@@ -25,6 +28,7 @@ use Laravel\Jetstream\Http\Livewire\DataPrivacyForm;
 use Laravel\Jetstream\Http\Livewire\DeleteTeamForm;
 use Laravel\Jetstream\Http\Livewire\DeleteTenantForm;
 use Laravel\Jetstream\Http\Livewire\DeleteUserForm;
+use Laravel\Jetstream\Http\Livewire\DomainAdminManager;
 use Laravel\Jetstream\Http\Livewire\LogoutOtherBrowserSessionsForm;
 use Laravel\Jetstream\Http\Livewire\NavigationMenu;
 use Laravel\Jetstream\Http\Livewire\PasskeyManager;
@@ -43,6 +47,7 @@ use Laravel\Jetstream\Http\Middleware\EnsureCustomerAccountContext;
 use Laravel\Jetstream\Http\Middleware\EnsureTenantContext;
 use Laravel\Jetstream\Http\Middleware\EnsureUserIsNotBlocked;
 use Laravel\Jetstream\Http\Middleware\EnsureUserIsSystemAdmin;
+use Laravel\Jetstream\Listeners\AddVerifiedUserToDomainTeams;
 use Laravel\Jetstream\Tenancy\CustomerContext;
 use Laravel\Jetstream\Tenancy\TenantContext;
 use Livewire\Livewire;
@@ -61,6 +66,8 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->app->scoped(TenantContext::class);
         $this->app->scoped(CustomerContext::class);
         $this->app->scoped(RoleRegistry::class);
+
+        $this->app->singletonIf(VerifiesDomains::class, VerifyDomainViaDnsOrMeta::class);
     }
 
     /**
@@ -151,6 +158,14 @@ class JetstreamServiceProvider extends ServiceProvider
                 Livewire::component('portal.update-account-name-form', UpdateAccountNameForm::class);
                 Livewire::component('portal.account-member-manager', AccountMemberManager::class);
             }
+
+            if (Features::hasDomainAdminFeatures()) {
+                Livewire::component('domains.domain-admin-manager', DomainAdminManager::class);
+            }
+        }
+
+        if (Features::hasDomainAdminFeatures() && Features::hasTeamFeatures()) {
+            Event::listen(Verified::class, AddVerifiedUserToDomainTeams::class);
         }
     }
 
@@ -268,6 +283,11 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2026_07_03_860000_add_phone_verification_columns.php' => database_path('migrations/2026_07_03_860000_add_phone_verification_columns.php'),
         ], 'jetstream-compliance-migrations');
 
+        $this->publishesMigrations([
+            __DIR__.'/../database/migrations/2026_07_07_100000_create_domain_claims_table.php' => database_path('migrations/2026_07_07_100000_create_domain_claims_table.php'),
+            __DIR__.'/../database/migrations/2026_07_07_200000_create_domain_activities_table.php' => database_path('migrations/2026_07_07_200000_create_domain_activities_table.php'),
+        ], 'jetstream-domain-migrations');
+
         $this->publishes([
             __DIR__.'/../routes/livewire.php' => base_path('routes/jetstream.php'),
         ], 'jetstream-routes');
@@ -303,6 +323,7 @@ class JetstreamServiceProvider extends ServiceProvider
         }
 
         $this->commands([
+            Console\CreateUserCommand::class,
             Console\InstallCommand::class,
             Console\PurgeCommand::class,
         ]);

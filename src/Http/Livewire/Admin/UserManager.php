@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laravel\Jetstream\Http\Livewire\Admin;
 
 use Illuminate\Support\Facades\Validator;
+use Laravel\Jetstream\Actions\CreateUser;
 use Laravel\Jetstream\Events\UserBlocked;
 use Laravel\Jetstream\Events\UserUnblocked;
 use Laravel\Jetstream\Jetstream;
@@ -45,6 +46,81 @@ class UserManager extends Component
      * @var string
      */
     public $blockReason = '';
+
+    /**
+     * Indicates if a user is currently being created.
+     *
+     * @var bool
+     */
+    public $creatingUser = false;
+
+    /**
+     * The "create user" form state.
+     *
+     * @var array{name: string, email: string, password: string, domain_master: bool, send_reset_mail: bool}
+     */
+    public $createUserForm = [
+        'name' => '',
+        'email' => '',
+        'password' => '',
+        'domain_master' => false,
+        'send_reset_mail' => true,
+    ];
+
+    /**
+     * Start creating a new user.
+     *
+     * @return void
+     */
+    public function createUser()
+    {
+        $this->resetErrorBag();
+
+        $this->createUserForm = [
+            'name' => '',
+            'email' => '',
+            'password' => '',
+            'domain_master' => false,
+            'send_reset_mail' => true,
+        ];
+
+        $this->creatingUser = true;
+    }
+
+    /**
+     * Save the user that is being created.
+     *
+     * The account is created pre-verified. Without a password, a password
+     * setup link is emailed unless the administrator opted out. The user
+     * may also be made the domain master of their own email domain.
+     *
+     * @return void
+     */
+    public function saveUser(CreateUser $creator)
+    {
+        $email = trim($this->createUserForm['email']);
+
+        $masterDomains = [];
+
+        if ($this->createUserForm['domain_master']) {
+            $emailDomain = substr((string) strrchr($email, '@'), 1);
+
+            if ($emailDomain !== '') {
+                $masterDomains[] = $emailDomain;
+            }
+        }
+
+        $creator->create([
+            'name' => $this->createUserForm['name'],
+            'email' => $email,
+            'password' => $this->createUserForm['password'] !== '' ? $this->createUserForm['password'] : null,
+            'master_domains' => $masterDomains,
+        ], (bool) $this->createUserForm['send_reset_mail']);
+
+        $this->creatingUser = false;
+
+        $this->dispatch('saved');
+    }
 
     /**
      * Confirm that the given user should be blocked.

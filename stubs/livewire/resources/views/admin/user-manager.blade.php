@@ -5,9 +5,15 @@
                 <x-input type="text" class="block w-full" wire:model.live.debounce.300ms="search" placeholder="{{ __('Search users...') }}" />
             </div>
 
-            <x-action-message class="ms-3" on="saved">
-                {{ __('Saved.') }}
-            </x-action-message>
+            <div class="flex items-center">
+                <x-action-message class="me-3" on="saved">
+                    {{ __('Saved.') }}
+                </x-action-message>
+
+                <x-button wire:click="createUser" wire:loading.attr="disabled">
+                    {{ __('New User') }}
+                </x-button>
+            </div>
         </div>
 
         <div class="mt-6 space-y-6">
@@ -38,7 +44,7 @@
                     <div class="flex items-center">
                         @if ($user->two_factor_secret)
                             <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
-                                    wire:click="resetTwoFactorAuthentication({{ $user->id }})"
+                                    wire:click="resetTwoFactorAuthentication('{{ $user->id }}')"
                                     wire:confirm="{{ __('Reset two-factor authentication for this user?') }}">
                                 {{ __('Reset 2FA') }}
                             </button>
@@ -46,7 +52,7 @@
 
                         @if ($user->passkeys()->exists())
                             <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
-                                    wire:click="resetPasskeys({{ $user->id }})"
+                                    wire:click="resetPasskeys('{{ $user->id }}')"
                                     wire:confirm="{{ __('Delete all passkeys for this user?') }}">
                                 {{ __('Reset Passkeys') }}
                             </button>
@@ -54,12 +60,12 @@
 
                         @if ($user->isBlocked())
                             <button class="cursor-pointer ms-6 text-sm text-green-500 underline focus:outline-none"
-                                    wire:click="unblockUser({{ $user->id }})">
+                                    wire:click="unblockUser('{{ $user->id }}')">
                                 {{ __('Unblock') }}
                             </button>
                         @else
                             <button class="cursor-pointer ms-6 text-sm text-red-500 focus:outline-none"
-                                    wire:click="confirmUserBlock({{ $user->id }})">
+                                    wire:click="confirmUserBlock('{{ $user->id }}')">
                                 {{ __('Block') }}
                             </button>
                         @endif
@@ -72,6 +78,62 @@
             @endforelse
         </div>
     </div>
+
+    <!-- Create User Modal -->
+    <x-dialog-modal wire:model.live="creatingUser">
+        <x-slot name="title">
+            {{ __('Create User') }}
+        </x-slot>
+
+        <x-slot name="content">
+            <div class="space-y-4">
+                <div>
+                    <x-label for="new-user-name" value="{{ __('Name') }}" />
+                    <x-input id="new-user-name" type="text" class="mt-1 block w-full" wire:model="createUserForm.name" />
+                    <x-input-error for="name" class="mt-2" />
+                </div>
+
+                <div>
+                    <x-label for="new-user-email" value="{{ __('Email') }}" />
+                    <x-input id="new-user-email" type="email" class="mt-1 block w-full" wire:model="createUserForm.email" />
+                    <x-input-error for="email" class="mt-2" />
+                </div>
+
+                <div>
+                    <x-label for="new-user-password" value="{{ __('Password (optional)') }}" />
+                    <x-input id="new-user-password" type="password" class="mt-1 block w-full" wire:model="createUserForm.password" autocomplete="new-password" />
+                    <x-input-error for="password" class="mt-2" />
+
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {{ __('Leave empty to email the user a password setup link instead.') }}
+                    </p>
+                </div>
+
+                @if (Laravel\Jetstream\Features::hasDomainAdminFeatures())
+                    <label class="flex items-center" for="new-user-domain-master">
+                        <x-checkbox id="new-user-domain-master" wire:model="createUserForm.domain_master" />
+                        <span class="ms-2 text-sm text-gray-600 dark:text-gray-400">{{ __('Make the user the domain master of their email domain') }}</span>
+                    </label>
+                    <x-input-error for="master_domains" class="mt-2" />
+                @endif
+
+                <label class="flex items-center" for="new-user-send-reset-mail">
+                    <x-checkbox id="new-user-send-reset-mail" wire:model="createUserForm.send_reset_mail" />
+                    <span class="ms-2 text-sm text-gray-600 dark:text-gray-400">{{ __('Email a password setup link when no password is set') }}</span>
+                </label>
+            </div>
+        </x-slot>
+
+        <x-slot name="footer">
+            <x-secondary-button wire:click="$set('creatingUser', false)" wire:loading.attr="disabled">
+                {{ __('Cancel') }}
+            </x-secondary-button>
+
+            <x-button class="ms-3" wire:click="saveUser" wire:loading.attr="disabled">
+                {{ __('Create') }}
+            </x-button>
+        </x-slot>
+    </x-dialog-modal>
 
     <!-- Block User Modal -->
     <x-dialog-modal wire:model.live="confirmingUserBlock">

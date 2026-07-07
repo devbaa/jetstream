@@ -178,6 +178,12 @@
                                 </x-dropdown-link>
                             @endif
 
+                            @if (Laravel\Jetstream\Jetstream::hasDomainAdminFeatures())
+                                <x-dropdown-link href="{{ route('domains.show') }}">
+                                    {{ __('Domain Administration') }}
+                                </x-dropdown-link>
+                            @endif
+
                             @if (Laravel\Jetstream\Jetstream::hasTenantFeatures() && Auth::user()->isSystemAdmin())
                                 <x-dropdown-link href="{{ route('admin.tenants.index') }}">
                                     {{ __('Tenant Administration') }}

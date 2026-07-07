@@ -65,6 +65,7 @@ return [
         // Features::api(),
         // Features::teams(['invitations' => true]),
         // Features::tenants(['portal' => true, 'customer-registration' => true]),
+        // Features::domainAdmin(['multi-domain' => true]),
         Features::accountDeletion(),
         Features::dataPrivacy(),
         Features::accountRecovery(),
