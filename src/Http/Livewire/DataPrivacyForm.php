@@ -140,6 +140,14 @@ class DataPrivacyForm extends Component
                     'name' => $account->name,
                 ])->values()->all()
                 : [],
+            'domain_claims' => Jetstream::hasDomainAdminFeatures()
+                ? $user->domainClaims()->get()->map(fn ($claim): array => [
+                    'domain' => $claim->domain,
+                    'method' => $claim->method,
+                    'verified_at' => $claim->verified_at?->toIso8601String(),
+                    'superseded_at' => $claim->superseded_at?->toIso8601String(),
+                ])->values()->all()
+                : [],
             'data_requests' => Jetstream::newDataRequestModel()->newQuery()
                 ->where('user_id', $user->id)
                 ->get()

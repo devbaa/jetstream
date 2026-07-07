@@ -30,18 +30,18 @@
                         @endif
 
                         <button class="cursor-pointer ms-6 text-sm {{ $tenant->allow_customer_registration ? 'text-green-500' : 'text-gray-400' }} underline focus:outline-none"
-                                wire:click="toggleCustomerRegistration({{ $tenant->id }})">
+                                wire:click="toggleCustomerRegistration('{{ $tenant->id }}')">
                             {{ $tenant->allow_customer_registration ? __('Self-registration on') : __('Self-registration off') }}
                         </button>
 
                         <button class="cursor-pointer ms-6 text-sm text-gray-400 underline focus:outline-none"
-                                wire:click="toggleTenantFreeze({{ $tenant->id }})"
+                                wire:click="toggleTenantFreeze('{{ $tenant->id }}')"
                                 wire:confirm="{{ $tenant->isFrozen() ? __('Unfreeze this tenant?') : __('Freeze this tenant? Its staff and customers will lose access.') }}">
                             {{ $tenant->isFrozen() ? __('Unfreeze') : __('Freeze') }}
                         </button>
 
                         <button class="cursor-pointer ms-6 text-sm text-red-500 focus:outline-none"
-                                wire:click="confirmTenantDeletion({{ $tenant->id }})">
+                                wire:click="confirmTenantDeletion('{{ $tenant->id }}')">
                             {{ __('Delete') }}
                         </button>
                     </div>

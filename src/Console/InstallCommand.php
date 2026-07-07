@@ -389,6 +389,9 @@ class InstallCommand extends Command implements PromptsForMissingInput
         // Publish Compliance Migrations (audit logs, data requests, soft deletes, recovery)...
         $this->callSilent('vendor:publish', ['--tag' => 'jetstream-compliance-migrations', '--force' => true]);
 
+        // Publish Domain Admin Migrations (domain claims, domain activity)...
+        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-domain-migrations', '--force' => true]);
+
         // Configuration...
         $this->replaceInFile('// Features::tenants([\'portal\' => true, \'customer-registration\' => true])', 'Features::tenants([\'portal\' => true, \'customer-registration\' => true])', config_path('jetstream.php'));
 
@@ -404,6 +407,8 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy(__DIR__.'/../../stubs/app/Models/CustomerInvitation.php', app_path('Models/CustomerInvitation.php'));
         copy(__DIR__.'/../../stubs/app/Models/AuditLog.php', app_path('Models/AuditLog.php'));
         copy(__DIR__.'/../../stubs/app/Models/DataRequest.php', app_path('Models/DataRequest.php'));
+        copy(__DIR__.'/../../stubs/app/Models/DomainClaim.php', app_path('Models/DomainClaim.php'));
+        copy(__DIR__.'/../../stubs/app/Models/DomainActivity.php', app_path('Models/DomainActivity.php'));
         copy(__DIR__.'/../../stubs/app/Models/User.php', app_path('Models/User.php'));
 
         // Actions...
