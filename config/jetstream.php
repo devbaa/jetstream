@@ -7,7 +7,11 @@ use Laravel\Jetstream\Features;
 return [
     'stack' => 'livewire',
     'middleware' => ['web'],
-    'features' => [Features::accountDeletion()],
+    'features' => [
+        Features::accountDeletion(),
+        Features::dataPrivacy(),
+        Features::accountRecovery(),
+    ],
     'admin_email' => env('JETSTREAM_ADMIN_EMAIL'),
     'tenants' => [
         'self_service_creation' => true,
