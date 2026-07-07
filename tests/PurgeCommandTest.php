@@ -6,6 +6,7 @@ namespace Laravel\Jetstream\Tests;
 
 use App\Actions\Jetstream\DeleteUser;
 use App\Models\AuditLog;
+use App\Models\CustomerAccount;
 use App\Models\DataRequest;
 use App\Models\Team;
 use App\Models\Tenant;
@@ -153,6 +154,78 @@ class PurgeCommandTest extends OrchestraTestCase
         $this->artisan('jetstream:purge')->assertSuccessful();
 
         $this->assertFalse($user->fresh()->trashed());
+    }
+
+    public function test_standalone_tenants_trashed_past_retention_are_purged_with_their_resources(): void
+    {
+        $owner = $this->createUser();
+
+        $tenant = Tenant::forceCreate(['user_id' => $owner->id, 'name' => 'Acme', 'slug' => 'acme']);
+        $recent = Tenant::forceCreate(['user_id' => $owner->id, 'name' => 'Recent', 'slug' => 'recent']);
+
+        $staff = $this->createUser('staff@laravel.com');
+        $tenant->users()->attach($staff, ['role' => 'admin']);
+
+        $tenant->roles()->create(['key' => 'editor', 'name' => 'Editor', 'permissions' => ['posts:update']]);
+
+        $customer = $this->createUser('jane@example.com');
+
+        $account = CustomerAccount::forceCreate([
+            'tenant_id' => $tenant->id,
+            'user_id' => $customer->id,
+            'name' => 'Jane Co',
+        ]);
+
+        $tenant->customerInvitations()->create(['email' => 'invited@example.com']);
+
+        $tenant->delete();
+        $recent->delete();
+
+        $tenant->forceFill(['deleted_at' => now()->subDays(45)])->save();
+
+        $this->artisan('jetstream:purge')->assertSuccessful();
+
+        $this->assertNull(Tenant::withTrashed()->find($tenant->id));
+        $this->assertNotNull(Tenant::withTrashed()->find($recent->id));
+        $this->assertNull(CustomerAccount::withTrashed()->find($account->id));
+        $this->assertSame(0, DB::table('tenant_user')->count());
+        $this->assertSame(0, DB::table('roles')->where('tenant_id', $tenant->id)->count());
+        $this->assertSame(0, DB::table('customer_invitations')->count());
+    }
+
+    public function test_standalone_customer_accounts_trashed_past_retention_are_purged(): void
+    {
+        $owner = $this->createUser();
+
+        $tenant = Tenant::forceCreate(['user_id' => $owner->id, 'name' => 'Acme', 'slug' => 'acme']);
+
+        $customer = $this->createUser('jane@example.com');
+
+        $account = CustomerAccount::forceCreate([
+            'tenant_id' => $tenant->id,
+            'user_id' => $customer->id,
+            'name' => 'Jane Co',
+        ]);
+
+        $member = $this->createUser('mate@example.com');
+        $account->users()->attach($member);
+
+        $account->customerInvitations()->make(['email' => 'pending@example.com'])
+            ->forceFill(['tenant_id' => $tenant->id])
+            ->save();
+
+        $customer->forceFill(['current_customer_account_id' => $account->id])->save();
+
+        $account->delete();
+        $account->forceFill(['deleted_at' => now()->subDays(45)])->save();
+
+        $this->artisan('jetstream:purge')->assertSuccessful();
+
+        $this->assertNull(CustomerAccount::withTrashed()->find($account->id));
+        $this->assertNotNull(Tenant::find($tenant->id));
+        $this->assertSame(0, DB::table('customer_account_user')->count());
+        $this->assertSame(0, DB::table('customer_invitations')->count());
+        $this->assertNull($customer->fresh()->current_customer_account_id);
     }
 
     public function test_audit_logs_past_retention_are_pruned(): void
