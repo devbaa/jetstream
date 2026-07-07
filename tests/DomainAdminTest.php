@@ -5,14 +5,21 @@ declare(strict_types=1);
 namespace Laravel\Jetstream\Tests;
 
 use App\Models\DomainClaim;
+use App\Models\Team;
+use Illuminate\Auth\Events\Verified;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Laravel\Jetstream\Events\DomainClaimSuperseded;
 use Laravel\Jetstream\Events\DomainClaimVerified;
 use Laravel\Jetstream\Events\UserBlocked;
 use Laravel\Jetstream\Features;
+use Laravel\Jetstream\Http\Livewire\Admin\UserManager;
 use Laravel\Jetstream\Http\Livewire\DomainAdminManager;
 use Laravel\Jetstream\Jetstream;
+use Laravel\Jetstream\Mail\PasswordSetup;
 use Laravel\Jetstream\Tests\Fixtures\FakeDomainVerifier;
 use Laravel\Jetstream\Tests\Fixtures\User;
 use Livewire\Livewire;
@@ -23,6 +30,8 @@ class DomainAdminTest extends OrchestraTestCase
     #[\Override]
     protected function defineEnvironment($app)
     {
+        $this->defineHasTeamEnvironment($app);
+
         $features = $app->config->get('jetstream.features', []);
 
         $features[] = Features::domainAdmin();
@@ -374,5 +383,213 @@ class DomainAdminTest extends OrchestraTestCase
         Livewire::test(DomainAdminManager::class)
             ->call('checkClaim', $claim->id)
             ->assertStatus(404);
+    }
+
+    protected function createTeamFor(User $user): Team
+    {
+        return Team::forceCreate([
+            'user_id' => $user->id,
+            'name' => explode('@', $user->email, 2)[0]."'s Team",
+            'personal_team' => true,
+        ]);
+    }
+
+    public function test_verifying_a_claim_enrolls_existing_domain_users_into_the_masters_team(): void
+    {
+        $master = $this->createUser('taylor@acme.com');
+        $team = $this->createTeamFor($master);
+
+        $member = $this->createUser('adam@acme.com');
+        $unverified = $this->createUser('ghost@acme.com', verified: false);
+        $outsider = $this->createUser('jane@other.com');
+
+        $systemAdmin = $this->createUser('root@acme.com');
+        $systemAdmin->forceFill(['is_system_admin' => true])->save();
+
+        $claim = $this->claimAndVerify($master);
+
+        $team = $team->fresh();
+
+        $this->assertTrue($team->hasUser($member->fresh()));
+        $this->assertFalse($team->hasUser($unverified->fresh()));
+        $this->assertFalse($team->hasUser($outsider->fresh()));
+        $this->assertFalse($team->hasUser($systemAdmin->fresh()));
+
+        $activity = $claim->activities()->where('action', 'member:added-to-team')->firstOrFail();
+        $this->assertSame($member->id, $activity->subject_id);
+        $this->assertSame(['team_id' => $team->id], $activity->details);
+    }
+
+    public function test_users_are_enrolled_into_the_masters_team_when_they_verify_their_email(): void
+    {
+        $master = $this->createUser('taylor@acme.com');
+        $team = $this->createTeamFor($master);
+
+        $this->claimAndVerify($master);
+
+        $late = $this->createUser('late@acme.com', verified: false);
+
+        $this->assertFalse($team->fresh()->hasUser($late));
+
+        $late->forceFill(['email_verified_at' => now()])->save();
+
+        event(new Verified($late));
+
+        $this->assertTrue($team->fresh()->hasUser($late->fresh()));
+    }
+
+    public function test_enrollment_is_idempotent(): void
+    {
+        $master = $this->createUser('taylor@acme.com');
+        $team = $this->createTeamFor($master);
+
+        $member = $this->createUser('adam@acme.com');
+
+        $this->claimAndVerify($master);
+
+        event(new Verified($member->fresh()));
+
+        $this->assertSame(1, DB::table('team_user')
+            ->where('team_id', $team->id)
+            ->where('user_id', $member->id)
+            ->count());
+    }
+
+    public function test_the_cli_creates_a_verified_user_with_the_given_password(): void
+    {
+        Mail::fake();
+
+        $this->artisan('jetstream:create-user', [
+            'email' => 'new@acme.com',
+            '--name' => 'New User',
+            '--password' => 'super-secret-password',
+        ])->assertSuccessful();
+
+        $user = User::query()->where('email', 'new@acme.com')->firstOrFail();
+
+        $this->assertTrue($user->hasVerifiedEmail());
+        $this->assertTrue(Hash::check('super-secret-password', $user->password));
+        $this->assertNotNull($user->personalTeam());
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_the_cli_sends_a_password_setup_link_when_no_password_is_given(): void
+    {
+        Mail::fake();
+
+        $this->artisan('jetstream:create-user', ['email' => 'new@acme.com'])->assertSuccessful();
+
+        $user = User::query()->where('email', 'new@acme.com')->firstOrFail();
+
+        Mail::assertSent(PasswordSetup::class, fn (PasswordSetup $mail): bool => $mail->user->id === $user->id);
+    }
+
+    public function test_the_password_setup_link_can_be_skipped(): void
+    {
+        Mail::fake();
+
+        $this->artisan('jetstream:create-user', [
+            'email' => 'new@acme.com',
+            '--skip-reset-mail' => true,
+        ])->assertSuccessful();
+
+        $this->assertTrue(User::query()->where('email', 'new@acme.com')->exists());
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_the_cli_can_create_a_domain_master_superseding_the_previous_one(): void
+    {
+        Mail::fake();
+
+        $previous = $this->createUser('taylor@acme.com');
+        $previousClaim = $this->claimAndVerify($previous);
+
+        $member = $this->createUser('adam@acme.com');
+
+        $this->artisan('jetstream:create-user', [
+            'email' => 'boss@acme.com',
+            '--master' => true,
+            '--skip-reset-mail' => true,
+        ])->assertSuccessful();
+
+        $boss = User::query()->where('email', 'boss@acme.com')->firstOrFail();
+
+        $this->assertTrue($boss->isDomainAdminOf('acme.com'));
+        $this->assertSame('admin', $boss->activeDomainClaims()->firstOrFail()->method);
+
+        $this->assertFalse($previousClaim->fresh()->isActive());
+        $this->assertFalse($previous->fresh()->isDomainAdminOf('acme.com'));
+
+        // Existing domain users were enrolled into the new master's team...
+        $this->assertTrue($boss->personalTeam()->fresh()->hasUser($member->fresh()));
+    }
+
+    public function test_additional_master_domains_require_multi_domain_mode(): void
+    {
+        Mail::fake();
+
+        $this->artisan('jetstream:create-user', [
+            'email' => 'boss@acme.com',
+            '--master-domain' => ['other.com'],
+            '--skip-reset-mail' => true,
+        ])->assertFailed();
+
+        $this->assertFalse(User::query()->where('email', 'boss@acme.com')->exists());
+
+        config(['jetstream-options.domain-admin.multi-domain' => true]);
+
+        $this->artisan('jetstream:create-user', [
+            'email' => 'boss@acme.com',
+            '--master' => true,
+            '--master-domain' => ['other.com'],
+            '--skip-reset-mail' => true,
+        ])->assertSuccessful();
+
+        $boss = User::query()->where('email', 'boss@acme.com')->firstOrFail();
+
+        $this->assertTrue($boss->isDomainAdminOf('acme.com'));
+        $this->assertTrue($boss->isDomainAdminOf('other.com'));
+    }
+
+    public function test_duplicate_emails_are_rejected(): void
+    {
+        $this->createUser('taylor@acme.com');
+
+        $this->artisan('jetstream:create-user', [
+            'email' => 'taylor@acme.com',
+            '--skip-reset-mail' => true,
+        ])->assertFailed();
+    }
+
+    public function test_system_admins_can_create_a_domain_master_from_the_admin_screen(): void
+    {
+        Mail::fake();
+
+        $admin = $this->createUser('root@example.org');
+        $admin->forceFill(['is_system_admin' => true])->save();
+
+        $member = $this->createUser('adam@acme.com');
+
+        $this->actingAs($admin);
+
+        Livewire::test(UserManager::class)
+            ->call('createUser')
+            ->set('createUserForm.name', 'Boss')
+            ->set('createUserForm.email', 'boss@acme.com')
+            ->set('createUserForm.domain_master', true)
+            ->set('createUserForm.send_reset_mail', false)
+            ->call('saveUser')
+            ->assertHasNoErrors()
+            ->assertDispatched('saved');
+
+        $boss = User::query()->where('email', 'boss@acme.com')->firstOrFail();
+
+        $this->assertTrue($boss->isDomainAdminOf('acme.com'));
+        $this->assertSame('admin', $boss->activeDomainClaims()->firstOrFail()->method);
+        $this->assertTrue($boss->personalTeam()->fresh()->hasUser($member->fresh()));
+
+        Mail::assertNothingSent();
     }
 }

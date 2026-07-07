@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Tests;
 
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Jetstream\Http\Livewire\Admin\UserManager;
 use Laravel\Jetstream\Jetstream;
+use Laravel\Jetstream\Mail\PasswordSetup;
 use Laravel\Jetstream\Tests\Fixtures\User;
 use Livewire\Livewire;
 
@@ -145,5 +148,87 @@ class AdminUserManagerTest extends OrchestraTestCase
         $this->actingAs($user);
 
         $this->get('/admin/users')->assertForbidden();
+    }
+
+    public function test_admins_can_create_a_user_with_a_password(): void
+    {
+        Mail::fake();
+
+        $admin = $this->createAdmin();
+
+        $this->actingAs($admin);
+
+        Livewire::test(UserManager::class)
+            ->call('createUser')
+            ->assertSet('creatingUser', true)
+            ->set('createUserForm.name', 'New User')
+            ->set('createUserForm.email', 'new@laravel.com')
+            ->set('createUserForm.password', 'super-secret-password')
+            ->call('saveUser')
+            ->assertHasNoErrors()
+            ->assertSet('creatingUser', false)
+            ->assertDispatched('saved');
+
+        $user = User::query()->where('email', 'new@laravel.com')->firstOrFail();
+
+        $this->assertTrue($user->hasVerifiedEmail());
+        $this->assertTrue(Hash::check('super-secret-password', $user->password));
+        $this->assertNotNull($user->personalTeam());
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_admins_can_create_a_user_without_a_password_and_a_setup_link_is_emailed(): void
+    {
+        Mail::fake();
+
+        $admin = $this->createAdmin();
+
+        $this->actingAs($admin);
+
+        Livewire::test(UserManager::class)
+            ->call('createUser')
+            ->set('createUserForm.name', 'New User')
+            ->set('createUserForm.email', 'new@laravel.com')
+            ->call('saveUser')
+            ->assertHasNoErrors();
+
+        Mail::assertSent(PasswordSetup::class);
+    }
+
+    public function test_the_setup_link_can_be_skipped_when_creating_a_user(): void
+    {
+        Mail::fake();
+
+        $admin = $this->createAdmin();
+
+        $this->actingAs($admin);
+
+        Livewire::test(UserManager::class)
+            ->call('createUser')
+            ->set('createUserForm.name', 'New User')
+            ->set('createUserForm.email', 'new@laravel.com')
+            ->set('createUserForm.send_reset_mail', false)
+            ->call('saveUser')
+            ->assertHasNoErrors();
+
+        $this->assertTrue(User::query()->where('email', 'new@laravel.com')->exists());
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_duplicate_emails_are_rejected_when_creating_a_user(): void
+    {
+        $admin = $this->createAdmin();
+        $this->createUser('existing@laravel.com');
+
+        $this->actingAs($admin);
+
+        Livewire::test(UserManager::class)
+            ->call('createUser')
+            ->set('createUserForm.name', 'New User')
+            ->set('createUserForm.email', 'existing@laravel.com')
+            ->call('saveUser')
+            ->assertHasErrors(['email']);
     }
 }
