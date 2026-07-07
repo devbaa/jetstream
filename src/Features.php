@@ -231,4 +231,39 @@ class Features
     {
         return 'account-recovery';
     }
+
+    /**
+     * Determine if the application is using the domain admin feature.
+     *
+     * @return bool
+     */
+    public static function hasDomainAdminFeatures()
+    {
+        return static::enabled(static::domainAdmin());
+    }
+
+    /**
+     * Determine if domain admins may claim domains beyond their own email domain.
+     *
+     * @return bool
+     */
+    public static function allowsMultipleDomains()
+    {
+        return static::optionEnabled(static::domainAdmin(), 'multi-domain');
+    }
+
+    /**
+     * Enable the domain admin feature.
+     *
+     * @param  array<string, bool>  $options
+     * @return string
+     */
+    public static function domainAdmin(array $options = [])
+    {
+        if (! empty($options)) {
+            config(['jetstream-options.domain-admin' => $options]);
+        }
+
+        return 'domain-admin';
+    }
 }

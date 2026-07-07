@@ -16,6 +16,7 @@ use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\Audit\Auditable;
 use Laravel\Jetstream\HasCustomerAccounts;
+use Laravel\Jetstream\HasDomainClaims;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Jetstream\HasTeams;
 use Laravel\Jetstream\HasTenants;
@@ -54,6 +55,7 @@ class User extends Authenticatable implements PasskeyUser
     use HasUuids;
     use HasApiTokens;
     use HasCustomerAccounts;
+    use HasDomainClaims;
 
     /** @use HasFactory<UserFactory> */
     use HasFactory;

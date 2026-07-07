@@ -133,6 +133,20 @@ class Jetstream
     public static $dataRequestModel = 'App\\Models\\DataRequest';
 
     /**
+     * The domain claim model that should be used by Jetstream.
+     *
+     * @var class-string<\Laravel\Jetstream\DomainClaim>
+     */
+    public static $domainClaimModel = 'App\\Models\\DomainClaim';
+
+    /**
+     * The domain activity model that should be used by Jetstream.
+     *
+     * @var class-string<\Laravel\Jetstream\DomainActivity>
+     */
+    public static $domainActivityModel = 'App\\Models\\DomainActivity';
+
+    /**
      * The callback that determines if the current request may bypass rate limiting.
      *
      * @var (\Closure(\Illuminate\Http\Request): bool)|null
@@ -352,6 +366,16 @@ class Jetstream
     public static function hasAccountRecoveryFeatures()
     {
         return Features::hasAccountRecoveryFeatures();
+    }
+
+    /**
+     * Determine if Jetstream is using the domain admin feature.
+     *
+     * @return bool
+     */
+    public static function hasDomainAdminFeatures()
+    {
+        return Features::hasDomainAdminFeatures();
     }
 
     /**
@@ -748,6 +772,76 @@ class Jetstream
     }
 
     /**
+     * Get the name of the domain claim model used by the application.
+     *
+     * @return class-string<\Laravel\Jetstream\DomainClaim>
+     */
+    public static function domainClaimModel()
+    {
+        return static::$domainClaimModel;
+    }
+
+    /**
+     * Get a new instance of the domain claim model.
+     *
+     * @return \Laravel\Jetstream\DomainClaim
+     */
+    public static function newDomainClaimModel()
+    {
+        $model = static::domainClaimModel();
+
+        return new $model;
+    }
+
+    /**
+     * Specify the domain claim model that should be used by Jetstream.
+     *
+     * @param  class-string<\Laravel\Jetstream\DomainClaim>  $model
+     * @return static
+     */
+    public static function useDomainClaimModel(string $model)
+    {
+        static::$domainClaimModel = $model;
+
+        return new static;
+    }
+
+    /**
+     * Get the name of the domain activity model used by the application.
+     *
+     * @return class-string<\Laravel\Jetstream\DomainActivity>
+     */
+    public static function domainActivityModel()
+    {
+        return static::$domainActivityModel;
+    }
+
+    /**
+     * Get a new instance of the domain activity model.
+     *
+     * @return \Laravel\Jetstream\DomainActivity
+     */
+    public static function newDomainActivityModel()
+    {
+        $model = static::domainActivityModel();
+
+        return new $model;
+    }
+
+    /**
+     * Specify the domain activity model that should be used by Jetstream.
+     *
+     * @param  class-string<\Laravel\Jetstream\DomainActivity>  $model
+     * @return static
+     */
+    public static function useDomainActivityModel(string $model)
+    {
+        static::$domainActivityModel = $model;
+
+        return new static;
+    }
+
+    /**
      * Register a callback that determines if a request may bypass Jetstream's rate limiting.
      *
      * @param  \Closure(\Illuminate\Http\Request): bool  $callback
@@ -973,6 +1067,17 @@ class Jetstream
     public static function verifyPhonesUsing(string $class)
     {
         app()->singleton(Contracts\SendsPhoneVerifications::class, $class);
+    }
+
+    /**
+     * Register a class / callback that should be used to verify domain claims.
+     *
+     * @param  string  $class
+     * @return void
+     */
+    public static function verifyDomainsUsing(string $class)
+    {
+        app()->singleton(Contracts\VerifiesDomains::class, $class);
     }
 
     /**
