@@ -79,15 +79,4 @@ abstract class AuditLog extends Model
     {
         return $this->belongsTo(Jetstream::tenantModel(), 'tenant_id');
     }
-
-    /**
-     * Scope the query to the log entries recorded for the given tenant.
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<static>
-     */
-    public function scopeForTenant(\Illuminate\Database\Eloquent\Builder $query, Tenant $tenant): \Illuminate\Database\Eloquent\Builder
-    {
-        return $query->where('tenant_id', $tenant->id);
-    }
 }

@@ -122,7 +122,7 @@ class DomainAdminManager extends Component
 
         abort_if($claim === null, 404);
 
-        $this->rateLimit('domain-check:'.$claim->id, maxAttempts: 10, decaySeconds: 60, errorBag: 'verification');
+        $this->rateLimit('domain-check', maxAttempts: 10, decaySeconds: 60, errorBag: 'verification');
 
         if (! app(VerifyDomainClaim::class)->verify($claim)) {
             $this->addError('verification', __('We could not find the verification token for :domain. Publish the DNS TXT record or the meta tag shown below, then check again.', ['domain' => $claim->domain]));

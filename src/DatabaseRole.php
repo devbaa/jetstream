@@ -45,7 +45,6 @@ abstract class DatabaseRole extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'tenant_id',
         'key',
         'name',
         'description',
@@ -68,7 +67,7 @@ abstract class DatabaseRole extends Model
      */
     public function toRole()
     {
-        return tap(new Role($this->key, $this->name, array_values($this->permissions)), function ($role) {
+        return tap(new Role($this->key, $this->name, array_values($this->permissions ?? [])), function ($role) {
             $role->description((string) $this->description);
         });
     }

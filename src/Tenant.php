@@ -184,11 +184,11 @@ abstract class Tenant extends Model
 
         $this->users()->detach();
 
-        $this->customerAccounts()->withTrashed()->get()->each->purge();
+        $this->customerAccounts()->withoutTenancy()->withTrashed()->get()->each->purge();
 
-        $this->customerInvitations()->delete();
+        $this->customerInvitations()->withoutTenancy()->delete();
 
-        $this->roles()->delete();
+        $this->roles()->withoutTenancy()->delete();
 
         $this->teams()->withTrashed()->get()->each->purge();
 

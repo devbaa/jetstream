@@ -112,7 +112,8 @@ return [
     | Deleting a user, tenant, team, or customer account only soft deletes
     | it. The jetstream:purge command permanently erases soft-deleted
     | records once they have been trashed for this many days. Schedule the
-    | command to run daily: Schedule::command('jetstream:purge')->daily().
+    | command to run daily, passing --force so it does not prompt for
+    | confirmation: Schedule::command('jetstream:purge --force')->daily().
     |
     */
 

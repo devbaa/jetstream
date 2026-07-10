@@ -78,14 +78,6 @@ abstract class DataRequest extends Model
         return $this->status === self::STATUS_PENDING;
     }
 
-    /**
-     * Determine if the request is due for processing.
-     */
-    public function isDue(): bool
-    {
-        return $this->isPending() &&
-               ($this->process_after === null || $this->process_after->isPast());
-    }
 
     /**
      * Mark the request as completed.

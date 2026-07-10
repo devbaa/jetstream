@@ -102,7 +102,7 @@ class TeamMemberManager extends Component
     {
         $this->resetErrorBag();
 
-        $this->rateLimit('team-member-invite:'.$this->team->getKey(), maxAttempts: 20, decaySeconds: 60);
+        $this->rateLimit('team-member-invite', maxAttempts: 20, decaySeconds: 60);
 
         if (Features::sendsTeamInvitations()) {
             app(InvitesTeamMembers::class)->invite(

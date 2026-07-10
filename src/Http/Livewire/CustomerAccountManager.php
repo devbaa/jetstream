@@ -67,7 +67,7 @@ class CustomerAccountManager extends Component
     {
         $this->resetErrorBag();
 
-        $this->rateLimit('customer-invite:'.$this->tenant->getKey(), maxAttempts: 20, decaySeconds: 60);
+        $this->rateLimit('customer-invite', maxAttempts: 20, decaySeconds: 60);
 
         $inviter->invite(
             $this->user,

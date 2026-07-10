@@ -33,6 +33,8 @@ class CreateUser
      */
     public function create(array $input, bool $sendResetLink = true)
     {
+        $input['email'] = strtolower(trim($input['email']));
+
         Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
@@ -43,7 +45,7 @@ class CreateUser
             'master_domains.*.regex' => __('This is not a valid domain name.'),
         ])->validateWithBag('createUser');
 
-        $email = strtolower(trim($input['email']));
+        $email = $input['email'];
 
         $password = $input['password'] ?? null;
 
@@ -54,7 +56,9 @@ class CreateUser
 
         $this->validateMasterDomains($masterDomains, $email);
 
-        $user = DB::transaction(function () use ($input, $email, $password, $masterDomains) {
+        $claims = [];
+
+        $user = DB::transaction(function () use ($input, $email, $password, $masterDomains, &$claims) {
             $user = Jetstream::newUserModel();
 
             $user->forceFill([
@@ -81,11 +85,18 @@ class CreateUser
                     $claim->save();
                 }
 
-                app(VerifyDomainClaim::class)->activate($claim, 'admin');
+                $claims[] = $claim;
             }
 
             return $user;
         });
+
+        // Activate the master domains after the account is committed so the
+        // supersede/verify events (and the resulting team enrollments) are
+        // only announced for state that has actually been persisted...
+        foreach ($claims as $claim) {
+            app(VerifyDomainClaim::class)->activate($claim, 'admin');
+        }
 
         // Enroll the user into their own domain master's team, if any...
         app(AddUserToDomainTeams::class)->add($user);

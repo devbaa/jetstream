@@ -70,11 +70,14 @@ class AddUserToDomainTeams
             return;
         }
 
+        // lower(email) keeps the match case-insensitive on databases (such as
+        // PostgreSQL) whose LIKE is case-sensitive; the claim domain is stored
+        // lower-cased already.
         $users = Jetstream::newUserModel()->newQuery()
             ->whereKeyNot($claim->user_id)
             ->whereNotNull('email_verified_at')
             ->where('is_system_admin', false)
-            ->where('email', 'like', '%@'.$claim->domain)
+            ->whereRaw('lower(email) like ?', ['%@'.strtolower((string) $claim->domain)])
             ->get();
 
         foreach ($users as $user) {

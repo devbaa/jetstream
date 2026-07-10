@@ -14,4 +14,13 @@ abstract class TenantMembership extends Pivot
      * @var string
      */
     protected $table = 'tenant_user';
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'frozen_at' => 'datetime',
+    ];
 }

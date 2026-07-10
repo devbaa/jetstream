@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Laravel\Jetstream;
 
 use Illuminate\Contracts\Auth\StatefulGuard;
-use Laravel\Jetstream\Jetstream;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\ConfirmPassword;
 

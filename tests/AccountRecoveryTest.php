@@ -187,7 +187,7 @@ class AccountRecoveryTest extends OrchestraTestCase
 
         $response->assertSessionHas('status');
 
-        Mail::assertSent(AccountRecovery::class, function (AccountRecovery $mail) use ($user): bool {
+        Mail::assertQueued(AccountRecovery::class, function (AccountRecovery $mail) use ($user): bool {
             return $mail->hasTo('backup@laravel.com') && $mail->user->is($user);
         });
     }

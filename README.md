@@ -81,8 +81,12 @@ Schedule the purge command so soft-deleted records and due deletion requests are
 ```php
 use Illuminate\Support\Facades\Schedule;
 
-Schedule::command('jetstream:purge')->daily();
+Schedule::command('jetstream:purge --force')->daily();
 ```
+
+> The `--force` flag is required for scheduled runs: without it the command
+> prompts for confirmation in production, and a non-interactive scheduler
+> would abort — silently stopping retention and GDPR deletion.
 
 ### Install flags
 

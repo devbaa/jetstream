@@ -74,7 +74,7 @@ class AccountMemberManager extends Component
     {
         $this->resetErrorBag();
 
-        $this->rateLimit('account-member-invite:'.$this->account->getKey(), maxAttempts: 20, decaySeconds: 60);
+        $this->rateLimit('account-member-invite', maxAttempts: 20, decaySeconds: 60);
 
         $inviter->invite(
             $this->user,

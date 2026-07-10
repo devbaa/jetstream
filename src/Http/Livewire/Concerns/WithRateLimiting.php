@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire\Concerns;
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
-use Laravel\Jetstream\Jetstream;
 
 /**
  * Adds per-user (or per-IP for guests) rate limiting to Livewire actions.
@@ -51,7 +51,7 @@ trait WithRateLimiting
      */
     protected function rateLimiterKey(string $key): string
     {
-        $actor = Jetstream::currentUser()?->getAuthIdentifier() ?? request()->ip();
+        $actor = Auth::id() ?? request()->ip();
 
         return 'jetstream:'.$key.'|'.$actor;
     }

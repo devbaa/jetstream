@@ -133,7 +133,7 @@ class UpdateRecoveryChannelsForm extends Component
         $user = $this->user;
 
         if (is_string($user->recovery_email) && $user->recovery_email_verified_at === null) {
-            $this->rateLimit('recovery-email-verification:'.$user->getKey(), maxAttempts: 5, decaySeconds: 60);
+            $this->rateLimit('recovery-email-verification', maxAttempts: 5, decaySeconds: 60);
 
             Mail::to($user->recovery_email)->send(new RecoveryEmailVerification($user));
 
@@ -156,7 +156,7 @@ class UpdateRecoveryChannelsForm extends Component
             return;
         }
 
-        $this->rateLimit('phone-verification-send:'.$user->getKey(), maxAttempts: 5, decaySeconds: 60, errorBag: 'phone');
+        $this->rateLimit('phone-verification-send', maxAttempts: 5, decaySeconds: 60, errorBag: 'phone');
 
         $code = (string) random_int(100000, 999999);
 
@@ -181,7 +181,7 @@ class UpdateRecoveryChannelsForm extends Component
 
         $user = $this->user;
 
-        $this->rateLimit('phone-verification-confirm:'.$user->getKey(), maxAttempts: 6, decaySeconds: 60, errorBag: 'phone_verification_code');
+        $this->rateLimit('phone-verification-confirm', maxAttempts: 6, decaySeconds: 60, errorBag: 'phone_verification_code');
 
         $expired = $user->phone_verification_expires_at === null ||
                    $user->phone_verification_expires_at->isPast();
@@ -200,7 +200,7 @@ class UpdateRecoveryChannelsForm extends Component
             'phone_verification_expires_at' => null,
         ])->save();
 
-        $this->clearRateLimit('phone-verification-confirm:'.$user->getKey());
+        $this->clearRateLimit('phone-verification-confirm');
 
         $this->phoneVerificationCode = '';
 

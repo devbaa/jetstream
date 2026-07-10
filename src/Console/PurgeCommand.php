@@ -168,7 +168,9 @@ class PurgeCommand extends Command
                 Jetstream::newDataRequestModel()->newQuery()
                     ->where('user_id', $user->id)
                     ->where('status', DataRequest::STATUS_PENDING)
-                    ->update(['status' => DataRequest::STATUS_COMPLETED, 'completed_at' => now()]);
+                    ->get()
+                    ->each
+                    ->markCompleted();
             }
 
             if (Schema::hasTable('sessions')) {
@@ -206,7 +208,7 @@ class PurgeCommand extends Command
             ->where('deleted_at', '<=', $cutoff)
             ->get();
 
-        $tenants->each->purge();
+        $tenants->each(fn ($tenant) => DB::transaction(fn () => $tenant->purge()));
 
         $this->components->info(sprintf('Purged %d tenant(s).', $tenants->count()));
     }
@@ -225,7 +227,7 @@ class PurgeCommand extends Command
             ->where('deleted_at', '<=', $cutoff)
             ->get();
 
-        $teams->each->purge();
+        $teams->each(fn ($team) => DB::transaction(fn () => $team->purge()));
 
         $this->components->info(sprintf('Purged %d team(s).', $teams->count()));
     }
@@ -244,7 +246,7 @@ class PurgeCommand extends Command
             ->where('deleted_at', '<=', $cutoff)
             ->get();
 
-        $accounts->each->purge();
+        $accounts->each(fn ($account) => DB::transaction(fn () => $account->purge()));
 
         $this->components->info(sprintf('Purged %d customer account(s).', $accounts->count()));
     }

@@ -24,11 +24,6 @@ trait AuthorizesSystemAdmin
      */
     public function bootAuthorizesSystemAdmin()
     {
-        $user = Jetstream::currentUser();
-
-        abort_unless(
-            method_exists($user, 'isSystemAdmin') && $user->isSystemAdmin(),
-            403
-        );
+        abort_unless(Jetstream::currentUser()->isSystemAdmin(), 403);
     }
 }

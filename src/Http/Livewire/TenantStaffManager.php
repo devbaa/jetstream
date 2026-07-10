@@ -100,7 +100,7 @@ class TenantStaffManager extends Component
     {
         $this->resetErrorBag();
 
-        $this->rateLimit('tenant-staff-invite:'.$this->tenant->getKey(), maxAttempts: 20, decaySeconds: 60);
+        $this->rateLimit('tenant-staff-invite', maxAttempts: 20, decaySeconds: 60);
 
         $adder->add(
             $this->user,

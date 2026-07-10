@@ -50,6 +50,7 @@ class VerifyDomainClaim
                 ->where('domain', $claim->domain)
                 ->whereKeyNot($claim->getKey())
                 ->active()
+                ->lockForUpdate()
                 ->get();
 
             foreach ($superseded as $previous) {
