@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Validator;
 use Laravel\Jetstream\Actions\CreateUser;
 use Laravel\Jetstream\Events\UserBlocked;
 use Laravel\Jetstream\Events\UserUnblocked;
+use Laravel\Jetstream\Http\Livewire\Concerns\AuthorizesSystemAdmin;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
@@ -19,6 +20,8 @@ use Livewire\Component;
  */
 class UserManager extends Component
 {
+    use AuthorizesSystemAdmin;
+
     /**
      * The user search query.
      *

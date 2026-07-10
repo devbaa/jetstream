@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Gate;
 use Laravel\Jetstream\Actions\UpdateTenantStaffRole;
 use Laravel\Jetstream\Contracts\AddsTenantStaff;
 use Laravel\Jetstream\Contracts\RemovesTenantStaff;
+use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Role;
 use Laravel\Jetstream\RoleRegistry;
@@ -18,6 +19,8 @@ use Livewire\Component;
  */
 class TenantStaffManager extends Component
 {
+    use WithRateLimiting;
+
     /**
      * The tenant instance.
      *
@@ -96,6 +99,8 @@ class TenantStaffManager extends Component
     public function addStaffMember(AddsTenantStaff $adder)
     {
         $this->resetErrorBag();
+
+        $this->rateLimit('tenant-staff-invite:'.$this->tenant->getKey(), maxAttempts: 20, decaySeconds: 60);
 
         $adder->add(
             $this->user,

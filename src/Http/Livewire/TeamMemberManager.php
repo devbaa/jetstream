@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire;
 
+use Illuminate\Support\Facades\Gate;
 use Laravel\Jetstream\Actions\UpdateTeamMemberRole;
 use Laravel\Jetstream\Contracts\AddsTeamMembers;
 use Laravel\Jetstream\Contracts\InvitesTeamMembers;
 use Laravel\Jetstream\Contracts\RemovesTeamMembers;
 use Laravel\Jetstream\Features;
+use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Role;
 use Laravel\Jetstream\RoleRegistry;
@@ -19,6 +21,8 @@ use Livewire\Component;
  */
 class TeamMemberManager extends Component
 {
+    use WithRateLimiting;
+
     /**
      * The team instance.
      *
@@ -98,6 +102,8 @@ class TeamMemberManager extends Component
     {
         $this->resetErrorBag();
 
+        $this->rateLimit('team-member-invite:'.$this->team->getKey(), maxAttempts: 20, decaySeconds: 60);
+
         if (Features::sendsTeamInvitations()) {
             app(InvitesTeamMembers::class)->invite(
                 $this->user,
@@ -132,6 +138,8 @@ class TeamMemberManager extends Component
      */
     public function cancelTeamInvitation($invitationId)
     {
+        abort_unless(Gate::forUser($this->user)->check('removeTeamMember', $this->team), 403);
+
         if (! empty($invitationId)) {
             $model = Jetstream::teamInvitationModel();
 

@@ -6,6 +6,7 @@ namespace Laravel\Jetstream\Http\Livewire\Portal;
 
 use Laravel\Jetstream\Contracts\InvitesCustomers;
 use Laravel\Jetstream\Contracts\RemovesCustomerAccountMembers;
+use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
@@ -14,6 +15,8 @@ use Livewire\Component;
  */
 class AccountMemberManager extends Component
 {
+    use WithRateLimiting;
+
     /**
      * The customer account instance.
      *
@@ -70,6 +73,8 @@ class AccountMemberManager extends Component
     public function addMember(InvitesCustomers $inviter)
     {
         $this->resetErrorBag();
+
+        $this->rateLimit('account-member-invite:'.$this->account->getKey(), maxAttempts: 20, decaySeconds: 60);
 
         $inviter->invite(
             $this->user,

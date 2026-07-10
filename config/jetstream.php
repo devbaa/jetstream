@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 use Laravel\Jetstream\Features;
+use Laravel\Jetstream\Http\Middleware\AuthenticateSession;
 
 return [
     'stack' => 'livewire',
     'middleware' => ['web'],
+    'auth_session' => AuthenticateSession::class,
     'features' => [
         Features::accountDeletion(),
         Features::dataPrivacy(),
