@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Jetstream;
-use Laravel\Jetstream\RoleRegistry;
 
 class UpdateRole
 {
@@ -49,8 +48,6 @@ class UpdateRole
             'description' => $input['description'] ?? null,
             'permissions' => $permissions,
         ])->save();
-
-        app(RoleRegistry::class)->flush();
     }
 
     /**

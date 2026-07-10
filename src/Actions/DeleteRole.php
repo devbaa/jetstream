@@ -7,7 +7,6 @@ namespace Laravel\Jetstream\Actions;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Jetstream;
-use Laravel\Jetstream\RoleRegistry;
 
 class DeleteRole
 {
@@ -32,8 +31,6 @@ class DeleteRole
         }
 
         $role->delete();
-
-        app(RoleRegistry::class)->flush();
     }
 
     /**

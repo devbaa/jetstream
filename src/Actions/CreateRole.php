@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Jetstream;
-use Laravel\Jetstream\RoleRegistry;
 
 class CreateRole
 {
@@ -58,8 +57,6 @@ class CreateRole
             'description' => $input['description'] ?? null,
             'permissions' => $permissions,
         ]);
-
-        app(RoleRegistry::class)->flush();
 
         return $role;
     }

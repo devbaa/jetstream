@@ -61,6 +61,22 @@ abstract class DatabaseRole extends Model
     ];
 
     /**
+     * The "booted" method of the model.
+     *
+     * Any write to a role invalidates the per-request role registry so a
+     * stale role cannot survive a create, update, or delete.
+     *
+     * @return void
+     */
+    protected static function booted()
+    {
+        $flush = fn () => app(RoleRegistry::class)->flush();
+
+        static::saved($flush);
+        static::deleted($flush);
+    }
+
+    /**
      * Convert the database role to the role value object used throughout Jetstream.
      *
      * @return \Laravel\Jetstream\Role

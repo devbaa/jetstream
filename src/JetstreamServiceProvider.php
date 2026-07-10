@@ -86,29 +86,15 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
         $this->configureAuditing();
 
-        RedirectResponse::macro('banner', function ($message): RedirectResponse {
-            /** @var \Illuminate\Http\RedirectResponse $this */
-            return $this->with('flash', [
-                'bannerStyle' => 'success',
-                'banner' => $message,
-            ]);
-        });
-
-        RedirectResponse::macro('warningBanner', function ($message): RedirectResponse {
-            /** @var \Illuminate\Http\RedirectResponse $this */
-            return $this->with('flash', [
-                'bannerStyle' => 'warning',
-                'banner' => $message,
-            ]);
-        });
-
-        RedirectResponse::macro('dangerBanner', function ($message): RedirectResponse {
-            /** @var \Illuminate\Http\RedirectResponse $this */
-            return $this->with('flash', [
-                'bannerStyle' => 'danger',
-                'banner' => $message,
-            ]);
-        });
+        foreach (['banner' => 'success', 'warningBanner' => 'warning', 'dangerBanner' => 'danger'] as $macro => $style) {
+            RedirectResponse::macro($macro, function ($message) use ($style): RedirectResponse {
+                /** @var \Illuminate\Http\RedirectResponse $this */
+                return $this->with('flash', [
+                    'bannerStyle' => $style,
+                    'banner' => $message,
+                ]);
+            });
+        }
 
         if (class_exists(Livewire::class)) {
             Livewire::component('navigation-menu', NavigationMenu::class);
