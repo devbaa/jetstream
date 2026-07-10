@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Laravel\Jetstream\Audit\Auditable;
 use Laravel\Jetstream\CustomerAccount as JetstreamCustomerAccount;
 use Laravel\Jetstream\Events\CustomerAccountCreated;
@@ -12,6 +13,7 @@ use Laravel\Jetstream\Events\CustomerAccountDeleted;
 class CustomerAccount extends JetstreamCustomerAccount
 {
     use Auditable;
+    use HasFactory;
 
     /**
      * The attributes that are mass assignable.

@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Jetstream;
-use Laravel\Jetstream\RoleRegistry;
 
 class CreateRole
 {
@@ -44,14 +43,20 @@ class CreateRole
             ])->errorBag('createRole');
         }
 
+        $permissions = Jetstream::validPermissions(self::stringList($input['permissions']));
+
+        if ($permissions === []) {
+            throw ValidationException::withMessages([
+                'permissions' => [__('At least one valid permission must be selected.')],
+            ])->errorBag('createRole');
+        }
+
         $role = $tenant->roles()->create([
             'key' => $input['key'],
             'name' => $input['name'],
             'description' => $input['description'] ?? null,
-            'permissions' => Jetstream::validPermissions(self::stringList($input['permissions'])),
+            'permissions' => $permissions,
         ]);
-
-        app(RoleRegistry::class)->flush();
 
         return $role;
     }

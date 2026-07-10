@@ -231,4 +231,30 @@ class AdminUserManagerTest extends OrchestraTestCase
             ->call('saveUser')
             ->assertHasErrors(['email']);
     }
+
+    public function test_non_admins_cannot_use_the_admin_user_manager(): void
+    {
+        $user = $this->createUser();
+
+        $this->actingAs($user);
+
+        Livewire::test(UserManager::class)->assertStatus(403);
+    }
+
+    public function test_a_revoked_admin_cannot_keep_acting_through_a_snapshot(): void
+    {
+        $admin = $this->createAdmin();
+        $subject = $this->createUser('victim@laravel.com');
+
+        $this->actingAs($admin);
+
+        $component = Livewire::test(UserManager::class);
+
+        // The admin flag is revoked mid-session; the boot hook re-authorizes
+        // on every request, so a subsequent action must be forbidden.
+        $admin->forceFill(['is_system_admin' => false])->save();
+
+        $component->call('resetTwoFactorAuthentication', $subject->id)
+            ->assertStatus(403);
+    }
 }

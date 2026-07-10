@@ -10,12 +10,13 @@ trait InteractsWithBanner
      * Update the banner message.
      *
      * @param  string  $message
+     * @param  string  $style
      * @return void
      */
-    protected function banner($message)
+    protected function banner($message, $style = 'success')
     {
         $this->dispatch('banner-message',
-            style: 'success',
+            style: $style,
             message: $message,
         );
     }
@@ -28,10 +29,7 @@ trait InteractsWithBanner
      */
     protected function warningBanner($message)
     {
-        $this->dispatch('banner-message',
-            style: 'warning',
-            message: $message,
-        );
+        $this->banner($message, 'warning');
     }
 
     /**
@@ -42,9 +40,6 @@ trait InteractsWithBanner
      */
     protected function dangerBanner($message)
     {
-        $this->dispatch('banner-message',
-            style: 'danger',
-            message: $message,
-        );
+        $this->banner($message, 'danger');
     }
 }

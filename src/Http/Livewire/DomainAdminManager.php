@@ -9,6 +9,7 @@ use Laravel\Jetstream\Actions\VerifyDomainClaim;
 use Laravel\Jetstream\Events\UserBlocked;
 use Laravel\Jetstream\Events\UserUnblocked;
 use Laravel\Jetstream\Features;
+use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
@@ -25,6 +26,8 @@ use Livewire\Component;
  */
 class DomainAdminManager extends Component
 {
+    use WithRateLimiting;
+
     /**
      * The "claim domain" form state.
      *
@@ -115,7 +118,11 @@ class DomainAdminManager extends Component
 
         abort_unless($this->user->hasVerifiedEmail(), 403);
 
-        $claim = $this->user->domainClaims()->whereKey($claimId)->firstOrFail();
+        $claim = $this->user->domainClaims()->whereKey($claimId)->first();
+
+        abort_if($claim === null, 404);
+
+        $this->rateLimit('domain-check', maxAttempts: 10, decaySeconds: 60, errorBag: 'verification');
 
         if (! app(VerifyDomainClaim::class)->verify($claim)) {
             $this->addError('verification', __('We could not find the verification token for :domain. Publish the DNS TXT record or the meta tag shown below, then check again.', ['domain' => $claim->domain]));
@@ -134,8 +141,9 @@ class DomainAdminManager extends Component
      */
     public function manageClaim($claimId)
     {
-        $claim = $this->user->domainClaims()->whereKey($claimId)->firstOrFail();
+        $claim = $this->user->domainClaims()->whereKey($claimId)->first();
 
+        abort_if($claim === null, 404);
         abort_unless($claim->isActive(), 403);
 
         $this->managingClaimId = $claim->id;

@@ -153,17 +153,6 @@ abstract class DomainClaim extends Model
     }
 
     /**
-     * Scope the query to verified claims.
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<static>
-     */
-    public function scopeVerified(Builder $query): Builder
-    {
-        return $query->whereNotNull('verified_at');
-    }
-
-    /**
      * Scope the query to claims currently holding the domain admin flag.
      *
      * @param  \Illuminate\Database\Eloquent\Builder<static>  $query

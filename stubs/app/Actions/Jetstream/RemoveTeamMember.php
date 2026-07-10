@@ -10,6 +10,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Contracts\RemovesTeamMembers;
+use Laravel\Jetstream\Events\RemovingTeamMember;
 use Laravel\Jetstream\Events\TeamMemberRemoved;
 
 class RemoveTeamMember implements RemovesTeamMembers
@@ -22,6 +23,8 @@ class RemoveTeamMember implements RemovesTeamMembers
         $this->authorize($user, $team, $teamMember);
 
         $this->ensureUserDoesNotOwnTeam($teamMember, $team);
+
+        RemovingTeamMember::dispatch($team, $teamMember);
 
         $team->removeUser($teamMember);
 

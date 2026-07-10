@@ -22,7 +22,6 @@ use Laravel\Jetstream\Contracts\RemovesTeamMembers;
 use Laravel\Jetstream\Contracts\RemovesTenantStaff;
 use Laravel\Jetstream\Contracts\UpdatesTeamNames;
 use Laravel\Jetstream\Contracts\UpdatesTenantNames;
-use Laravel\Jetstream\RoleRegistry;
 use Laravel\Jetstream\Tenancy\TenantContext;
 
 class Jetstream
@@ -156,11 +155,26 @@ class Jetstream
     /**
      * Determine if Jetstream has registered roles.
      *
+     * When tenant features are enabled, database roles defined for the
+     * current tenant (or the application's global defaults) count as well,
+     * so member validation is not silently skipped for applications that
+     * define their roles in the database rather than statically.
+     *
      * @return bool
      */
     public static function hasRoles()
     {
-        return count(static::$roles) > 0;
+        if (count(static::$roles) > 0) {
+            return true;
+        }
+
+        if (Features::hasTenantFeatures()) {
+            return count(app(RoleRegistry::class)->all(
+                app(TenantContext::class)->currentId()
+            )) > 0;
+        }
+
+        return false;
     }
 
     /**
@@ -180,6 +194,28 @@ class Jetstream
             return app(RoleRegistry::class)->find(
                 $key, $tenant->id ?? app(TenantContext::class)->currentId()
             );
+        }
+
+        return static::$roles[$key] ?? null;
+    }
+
+    /**
+     * Find the role with the given key scoped to a specific tenant.
+     *
+     * Unlike findRole(), this never falls back to the tenant currently in
+     * context, so membership permission checks always resolve against the
+     * owning tenant of the team or account — including in queued jobs, the
+     * console, and requests that touch a tenant other than the current one.
+     * A null tenant id resolves the application's global default roles.
+     *
+     * @param  string  $key
+     * @param  int|string|null  $tenantId
+     * @return \Laravel\Jetstream\Role|null
+     */
+    public static function findRoleForTenant(string $key, $tenantId)
+    {
+        if (Features::hasTenantFeatures()) {
+            return app(RoleRegistry::class)->find($key, $tenantId);
         }
 
         return static::$roles[$key] ?? null;

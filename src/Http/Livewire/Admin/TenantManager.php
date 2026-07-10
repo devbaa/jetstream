@@ -9,6 +9,7 @@ use Laravel\Jetstream\Contracts\CreatesTenants;
 use Laravel\Jetstream\Contracts\DeletesTenants;
 use Laravel\Jetstream\Events\TenantFrozen;
 use Laravel\Jetstream\Events\TenantUnfrozen;
+use Laravel\Jetstream\Http\Livewire\Concerns\AuthorizesSystemAdmin;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Tenancy\TenantContext;
 use Livewire\Component;
@@ -20,6 +21,8 @@ use Livewire\Component;
  */
 class TenantManager extends Component
 {
+    use AuthorizesSystemAdmin;
+
     /**
      * The tenant search query.
      *

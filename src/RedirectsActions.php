@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream;
 
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response;
 
 trait RedirectsActions
 {
@@ -12,7 +12,7 @@ trait RedirectsActions
      * Get the redirect response for the given action.
      *
      * @param  object  $action
-     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\Response
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function redirectPath(object $action)
     {

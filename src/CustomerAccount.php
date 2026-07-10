@@ -141,7 +141,7 @@ abstract class CustomerAccount extends Model
 
         $this->users()->detach();
 
-        $this->customerInvitations()->delete();
+        $this->customerInvitations()->withoutTenancy()->delete();
 
         $this->forceDelete();
     }

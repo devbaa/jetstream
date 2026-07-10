@@ -30,7 +30,7 @@ class RemoveTeamMemberTest extends OrchestraTestCase
 
     public function test_team_members_can_be_removed()
     {
-        Event::fake([TeamMemberRemoved::class]);
+        Event::fake([TeamMemberRemoved::class, RemovingTeamMember::class]);
 
         $team = $this->createTeam();
 
@@ -52,6 +52,7 @@ class RemoveTeamMemberTest extends OrchestraTestCase
 
         $this->assertCount(0, $team->fresh()->users);
 
+        Event::assertDispatched(RemovingTeamMember::class);
         Event::assertDispatched(TeamMemberRemoved::class);
     }
 

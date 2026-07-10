@@ -63,17 +63,29 @@ class VerifyDomainViaDnsOrMeta implements VerifiesDomains
 
     /**
      * Determine if the domain's home page publishes the token as a meta tag.
+     *
+     * The homepage is fetched without following redirects so that a token
+     * served by a different host (via a cross-origin redirect) cannot verify
+     * the claim, and only hosts that resolve to public IP addresses are
+     * fetched to avoid server-side request forgery against internal services.
      */
     protected function hasMetaTag(DomainClaim $claim): bool
     {
-        foreach (['https://'.$claim->domain, 'https://www.'.$claim->domain] as $url) {
+        foreach ([$claim->domain, 'www.'.$claim->domain] as $host) {
+            if (! $this->resolvesToPublicAddress($host)) {
+                continue;
+            }
+
             try {
-                $response = Http::timeout(5)->get($url);
+                $response = Http::timeout(5)
+                    ->withoutRedirecting()
+                    ->withOptions(['allow_redirects' => false])
+                    ->get('https://'.$host);
             } catch (Throwable) {
                 continue;
             }
 
-            if ($response->successful() && $this->htmlContainsToken($response->body(), $claim)) {
+            if ($response->successful() && $this->headContainsToken($response->body(), $claim)) {
                 return true;
             }
         }
@@ -82,11 +94,51 @@ class VerifyDomainViaDnsOrMeta implements VerifiesDomains
     }
 
     /**
-     * Determine if the given HTML contains the claim's verification meta tag.
+     * Determine if the host resolves only to public, routable IP addresses.
      */
-    protected function htmlContainsToken(string $html, DomainClaim $claim): bool
+    protected function resolvesToPublicAddress(string $host): bool
     {
-        if (preg_match_all('/<meta\b[^>]*>/i', $html, $matches) === false) {
+        $records = @dns_get_record($host, DNS_A + DNS_AAAA);
+
+        if (! is_array($records) || $records === []) {
+            return false;
+        }
+
+        foreach ($records as $record) {
+            $ip = $record['ip'] ?? $record['ipv6'] ?? null;
+
+            if (! is_string($ip) || ! $this->isPublicIp($ip)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Determine if the given IP address is public (not private or reserved).
+     */
+    protected function isPublicIp(string $ip): bool
+    {
+        return filter_var(
+            $ip,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        ) !== false;
+    }
+
+    /**
+     * Determine if the given HTML document's head contains the claim's token.
+     *
+     * Only the document head is scanned so that a meta tag injected into
+     * page content (user-generated HTML, comments, profile fields) cannot be
+     * used to spoof ownership of the domain.
+     */
+    protected function headContainsToken(string $html, DomainClaim $claim): bool
+    {
+        $head = $this->extractHead($html);
+
+        if (preg_match_all('/<meta\b[^>]*>/i', $head, $matches) === false) {
             return false;
         }
 
@@ -100,5 +152,20 @@ class VerifyDomainViaDnsOrMeta implements VerifiesDomains
         }
 
         return false;
+    }
+
+    /**
+     * Extract the contents of the document head, stopping at the body.
+     */
+    protected function extractHead(string $html): string
+    {
+        if (preg_match('/<head\b[^>]*>(.*?)<\/head>/is', $html, $matches) === 1) {
+            return $matches[1];
+        }
+
+        // No explicit head: scan everything before the body opening tag.
+        $bodyPosition = stripos($html, '<body');
+
+        return $bodyPosition === false ? $html : substr($html, 0, $bodyPosition);
     }
 }

@@ -17,7 +17,7 @@ trait HasTeams
      */
     public function isCurrentTeam($team)
     {
-        return $team->id === $this->currentTeam->id;
+        return $team && $this->currentTeam && $team->id === $this->currentTeam->id;
     }
 
     /**
@@ -152,7 +152,7 @@ trait HasTeams
             ->membership
             ->role;
 
-        return $role ? Jetstream::findRole($role) : null;
+        return $role ? Jetstream::findRoleForTenant($role, $team->tenant_id) : null;
     }
 
     /**
@@ -168,9 +168,9 @@ trait HasTeams
             return true;
         }
 
-        return $this->belongsToTeam($team) && optional(Jetstream::findRole($team->users->where(
+        return $this->belongsToTeam($team) && optional(Jetstream::findRoleForTenant($team->users->where(
             'id', $this->id
-        )->first()->membership->role))->key === $role;
+        )->first()->membership->role, $team->tenant_id))->key === $role;
     }
 
     /**

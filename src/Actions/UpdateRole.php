@@ -6,8 +6,8 @@ namespace Laravel\Jetstream\Actions;
 
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Jetstream;
-use Laravel\Jetstream\RoleRegistry;
 
 class UpdateRole
 {
@@ -35,13 +35,19 @@ class UpdateRole
             'permissions.*' => ['string'],
         ])->validateWithBag('updateRole');
 
+        $permissions = Jetstream::validPermissions(self::stringList($input['permissions']));
+
+        if ($permissions === []) {
+            throw ValidationException::withMessages([
+                'permissions' => [__('At least one valid permission must be selected.')],
+            ])->errorBag('updateRole');
+        }
+
         $role->forceFill([
             'name' => $input['name'],
             'description' => $input['description'] ?? null,
-            'permissions' => Jetstream::validPermissions(self::stringList($input['permissions'])),
+            'permissions' => $permissions,
         ])->save();
-
-        app(RoleRegistry::class)->flush();
     }
 
     /**

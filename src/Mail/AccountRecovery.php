@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Laravel\Jetstream\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\URL;
 
-class AccountRecovery extends Mailable
+class AccountRecovery extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

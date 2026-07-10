@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Jetstream\Contracts\SendsPhoneVerifications;
+use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Mail\RecoveryEmailVerification;
 use Laravel\Jetstream\PhoneCountry;
@@ -22,6 +23,8 @@ use Livewire\Component;
  */
 class UpdateRecoveryChannelsForm extends Component
 {
+    use WithRateLimiting;
+
     /**
      * The component's state.
      *
@@ -130,6 +133,8 @@ class UpdateRecoveryChannelsForm extends Component
         $user = $this->user;
 
         if (is_string($user->recovery_email) && $user->recovery_email_verified_at === null) {
+            $this->rateLimit('recovery-email-verification', maxAttempts: 5, decaySeconds: 60);
+
             Mail::to($user->recovery_email)->send(new RecoveryEmailVerification($user));
 
             $this->dispatch('recovery-email-verification-sent');
@@ -150,6 +155,8 @@ class UpdateRecoveryChannelsForm extends Component
         if (! is_string($user->phone) || $user->phone_verified_at !== null) {
             return;
         }
+
+        $this->rateLimit('phone-verification-send', maxAttempts: 5, decaySeconds: 60, errorBag: 'phone');
 
         $code = (string) random_int(100000, 999999);
 
@@ -174,6 +181,8 @@ class UpdateRecoveryChannelsForm extends Component
 
         $user = $this->user;
 
+        $this->rateLimit('phone-verification-confirm', maxAttempts: 6, decaySeconds: 60, errorBag: 'phone_verification_code');
+
         $expired = $user->phone_verification_expires_at === null ||
                    $user->phone_verification_expires_at->isPast();
 
@@ -190,6 +199,8 @@ class UpdateRecoveryChannelsForm extends Component
             'phone_verification_code' => null,
             'phone_verification_expires_at' => null,
         ])->save();
+
+        $this->clearRateLimit('phone-verification-confirm');
 
         $this->phoneVerificationCode = '';
 

@@ -6,6 +6,7 @@ namespace Laravel\Jetstream\Http\Livewire;
 
 use Laravel\Jetstream\Contracts\DeletesCustomerAccounts;
 use Laravel\Jetstream\Contracts\InvitesCustomers;
+use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
@@ -14,6 +15,8 @@ use Livewire\Component;
  */
 class CustomerAccountManager extends Component
 {
+    use WithRateLimiting;
+
     /**
      * The tenant instance.
      *
@@ -64,6 +67,8 @@ class CustomerAccountManager extends Component
     {
         $this->resetErrorBag();
 
+        $this->rateLimit('customer-invite', maxAttempts: 20, decaySeconds: 60);
+
         $inviter->invite(
             $this->user,
             $this->tenant,
@@ -87,6 +92,8 @@ class CustomerAccountManager extends Component
      */
     public function cancelCustomerInvitation($invitationId)
     {
+        abort_unless($this->user->can('manageCustomers', $this->tenant), 403);
+
         if (! empty($invitationId)) {
             $this->tenant->customerInvitations()->whereKey($invitationId)->delete();
         }
