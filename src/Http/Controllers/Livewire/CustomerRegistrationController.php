@@ -46,7 +46,7 @@ class CustomerRegistrationController extends Controller
 
         $user = $request->user();
 
-        if (! $user) {
+        if ($user === null) {
             return redirect()->guest(route('login'));
         }
 

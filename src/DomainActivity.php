@@ -34,14 +34,14 @@ abstract class DomainActivity extends Model
     /**
      * The table associated with the model.
      *
-     * @var string
+     * @var string|null
      */
     protected $table = 'domain_activities';
 
     /**
      * The attributes that are mass assignable.
      *
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'action',

@@ -17,7 +17,7 @@ class AddVerifiedUserToDomainTeams
      */
     public function handle(Verified $event): void
     {
-        if (method_exists($event->user, 'emailDomain')) {
+        if ($event->user instanceof \App\Models\User) {
             app(AddUserToDomainTeams::class)->add($event->user);
         }
     }

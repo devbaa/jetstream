@@ -19,7 +19,7 @@ class EnsureUserIsSystemAdmin
         $user = $request->user();
 
         abort_unless(
-            $user && method_exists($user, 'isSystemAdmin') && $user->isSystemAdmin(),
+            $user !== null && method_exists($user, 'isSystemAdmin') && $user->isSystemAdmin(),
             403
         );
 

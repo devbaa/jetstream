@@ -140,7 +140,7 @@ class TeamMemberManager extends Component
     {
         abort_unless(Gate::forUser($this->user)->check('removeTeamMember', $this->team), 403);
 
-        if (! empty($invitationId)) {
+        if ($invitationId !== '') {
             $model = Jetstream::teamInvitationModel();
 
             $foreignKey = (new $model)->team()->getForeignKeyName();

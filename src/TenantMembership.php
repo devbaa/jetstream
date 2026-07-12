@@ -11,7 +11,7 @@ abstract class TenantMembership extends Pivot
     /**
      * The table associated with the pivot model.
      *
-     * @var string
+     * @var string|null
      */
     protected $table = 'tenant_user';
 

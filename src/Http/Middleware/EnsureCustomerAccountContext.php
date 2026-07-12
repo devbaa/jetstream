@@ -30,7 +30,7 @@ class EnsureCustomerAccountContext
 
         $account = $user->currentCustomerAccount;
 
-        if ($account && ! $user->hasActiveCustomerAccountAccess($account)) {
+        if ($account !== null && ! $user->hasActiveCustomerAccountAccess($account)) {
             $user->forceFill(['current_customer_account_id' => null])->save();
 
             $user->setRelation('currentCustomerAccount', null);
@@ -38,13 +38,13 @@ class EnsureCustomerAccountContext
             $account = null;
         }
 
-        if (! $account && ($only = $this->onlyAccountOf($user))) {
+        if ($account === null && ($only = $this->onlyAccountOf($user)) !== null) {
             $user->switchCustomerAccount($only);
 
             $account = $only;
         }
 
-        if (! $account && ! $request->routeIs('portal.show')) {
+        if ($account === null && ! $request->routeIs('portal.show')) {
             return $user->allCustomerAccounts()->isEmpty()
                         ? abort(403)
                         : redirect()->route('portal.show');

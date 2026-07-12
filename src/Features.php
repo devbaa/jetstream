@@ -16,7 +16,7 @@ class Features
     {
         $features = config('jetstream.features', []);
 
-        return is_array($features) && in_array($feature, $features);
+        return is_array($features) && in_array($feature, $features, true);
     }
 
     /**
@@ -170,7 +170,7 @@ class Features
      */
     public static function teams(array $options = [])
     {
-        if (! empty($options)) {
+        if ($options !== []) {
             config(['jetstream-options.teams' => $options]);
         }
 
@@ -185,7 +185,7 @@ class Features
      */
     public static function tenants(array $options = [])
     {
-        if (! empty($options)) {
+        if ($options !== []) {
             config(['jetstream-options.tenants' => $options]);
         }
 
@@ -260,7 +260,7 @@ class Features
      */
     public static function domainAdmin(array $options = [])
     {
-        if (! empty($options)) {
+        if ($options !== []) {
             config(['jetstream-options.domain-admin' => $options]);
         }
 

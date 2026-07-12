@@ -109,7 +109,7 @@ class RoleManager extends Component
 
         $tenantRole = $this->tenant->roles()->where('key', $key)->first();
 
-        if ($tenantRole) {
+        if ($tenantRole !== null) {
             $this->roleIdBeingUpdated = $tenantRole->id;
 
             $this->roleForm = [
@@ -121,7 +121,7 @@ class RoleManager extends Component
         } else {
             $role = app(RoleRegistry::class)->find($key, $this->tenant->id);
 
-            if (! $role) {
+            if ($role === null) {
                 return;
             }
 
@@ -145,7 +145,7 @@ class RoleManager extends Component
      */
     public function saveRole(CreateRole $creator, UpdateRole $updater)
     {
-        if ($this->roleIdBeingUpdated) {
+        if ($this->roleIdBeingUpdated !== null) {
             $updater->update(
                 $this->user,
                 $this->tenant,

@@ -23,7 +23,7 @@ class EnsureTenantContext
         if ($user instanceof \App\Models\User && Jetstream::userHasTenantFeatures($user)) {
             $tenant = $user->currentTenant;
 
-            if ($tenant && ! $user->hasActiveTenantAccess($tenant)) {
+            if ($tenant !== null && ! $user->hasActiveTenantAccess($tenant)) {
                 $user->forceFill(['current_tenant_id' => null])->save();
 
                 $user->setRelation('currentTenant', null);
@@ -48,7 +48,7 @@ class EnsureTenantContext
      */
     protected function ensureCurrentTeamIsWithinTenant($user, $tenant)
     {
-        if (! Jetstream::userHasTeamFeatures($user) || ! $user->currentTeam) {
+        if (! Jetstream::userHasTeamFeatures($user) || $user->currentTeam === null) {
             return;
         }
 
@@ -58,8 +58,8 @@ class EnsureTenantContext
             return;
         }
 
-        if (! $tenant || $teamTenantId !== $tenant->id) {
-            $team = $tenant ? $user->allTeams()->first(function ($team) use ($tenant) {
+        if ($tenant === null || $teamTenantId !== $tenant->id) {
+            $team = $tenant !== null ? $user->allTeams()->first(function ($team) use ($tenant) {
                 return $team->tenant_id === $tenant->id;
             }) : null;
 

@@ -19,7 +19,7 @@ class SystemAdminSeeder extends Seeder
     {
         $email = config('jetstream.admin_email');
 
-        if (! $email) {
+        if (! is_string($email) || $email === '') {
             return;
         }
 

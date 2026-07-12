@@ -525,11 +525,11 @@ EOF;
             array_values(array_filter(is_array($packages) ? $packages : func_get_args(), 'is_string'))
         );
 
-        return ! (new Process($command, base_path(), ['COMPOSER_MEMORY_LIMIT' => '-1']))
+        return (new Process($command, base_path(), ['COMPOSER_MEMORY_LIMIT' => '-1']))
             ->setTimeout(null)
             ->run(function ($type, $output) {
                 $this->output->write($output);
-            });
+            }) === 0;
     }
 
     /**
@@ -694,7 +694,9 @@ EOF;
             return \Illuminate\Support\php_binary();
         }
 
-        return (new PhpExecutableFinder())->find(false) ?: 'php';
+        $binary = (new PhpExecutableFinder())->find(false);
+
+        return $binary !== false ? $binary : 'php';
     }
 
     /**
@@ -723,7 +725,7 @@ EOF;
     /**
      * Prompt for missing input arguments using the returned questions.
      *
-     * @return array<string, callable>
+     * @return array<string, \Closure(): (int|string)>
      */
     protected function promptForMissingArgumentsUsing()
     {

@@ -31,7 +31,7 @@ class Role implements Rule
             ));
         }
 
-        return in_array($value, array_keys(Jetstream::$roles));
+        return in_array($value, array_keys(Jetstream::$roles), true);
     }
 
     /**

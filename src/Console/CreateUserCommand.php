@@ -39,7 +39,7 @@ class CreateUserCommand extends Command
     {
         $email = $this->argument('email');
 
-        if (! is_string($email) || $email === '') {
+        if ($email === '') {
             $this->components->error('An email address is required.');
 
             return self::FAILURE;
@@ -48,13 +48,15 @@ class CreateUserCommand extends Command
         $name = $this->option('name');
 
         if (! is_string($name) || $name === '') {
-            $name = ucfirst(strstr($email, '@', true) ?: $email);
+            $localPart = strstr($email, '@', true);
+
+            $name = ucfirst($localPart !== false && $localPart !== '' ? $localPart : $email);
         }
 
         $password = $this->option('password');
 
         $masterDomains = array_values(array_filter(
-            (array) $this->option('master-domain'),
+            $this->option('master-domain'),
             static fn ($domain): bool => is_string($domain) && $domain !== ''
         ));
 
@@ -72,12 +74,10 @@ class CreateUserCommand extends Command
                 'email' => $email,
                 'password' => is_string($password) && $password !== '' ? $password : null,
                 'master_domains' => $masterDomains,
-            ], ! (bool) $this->option('skip-reset-mail'));
+            ], ! $this->option('skip-reset-mail'));
         } catch (ValidationException $e) {
-            foreach ($e->errors() as $messages) {
-                foreach ($messages as $message) {
-                    $this->components->error($message);
-                }
+            foreach ($e->validator->errors()->all() as $message) {
+                $this->components->error($message);
             }
 
             return self::FAILURE;
@@ -85,8 +85,8 @@ class CreateUserCommand extends Command
 
         $this->components->info(sprintf('User %s created.', $user->email));
 
-        foreach ($user->activeDomainClaims()->pluck('domain') as $domain) {
-            $this->components->twoColumnDetail('Domain master', (string) $domain);
+        foreach ($user->activeDomainClaims()->get() as $claim) {
+            $this->components->twoColumnDetail('Domain master', $claim->domain);
         }
 
         if (is_string($password) && $password !== '') {

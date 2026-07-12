@@ -36,6 +36,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string|null $recovery_email
  * @property \Illuminate\Support\Carbon|null $recovery_email_verified_at
  * @property string $password
+ * @property string|null $remember_token
  * @property \Illuminate\Support\Carbon|null $email_verified_at
  * @property string|null $profile_photo_path
  * @property string|null $current_team_id

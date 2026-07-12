@@ -100,7 +100,7 @@ class AccountMemberManager extends Component
      */
     public function cancelInvitation($invitationId)
     {
-        if (! empty($invitationId)) {
+        if ($invitationId !== '') {
             $this->account->customerInvitations()->whereKey($invitationId)->delete();
         }
 

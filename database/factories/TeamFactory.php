@@ -15,7 +15,7 @@ class TeamFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * @return array<model-property<\App\Models\Team>, mixed>
      */
     public function definition(): array
     {
