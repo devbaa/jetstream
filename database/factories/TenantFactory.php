@@ -16,7 +16,7 @@ class TenantFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * @return array<model-property<\App\Models\Tenant>, mixed>
      */
     public function definition(): array
     {

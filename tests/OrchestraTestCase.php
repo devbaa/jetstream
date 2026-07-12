@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Tests;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Fortify\FortifyServiceProvider;
 use Laravel\Jetstream\Features;
@@ -17,6 +18,19 @@ use Orchestra\Testbench\TestCase;
 abstract class OrchestraTestCase extends TestCase
 {
     use LazilyRefreshDatabase, WithWorkbench;
+
+    protected function setUp(): void
+    {
+        // Surface lazy loads and silently discarded fills as exceptions so
+        // the suite runs Eloquent strictly. Missing-attribute prevention is
+        // left off: models returned by create() do not carry their database
+        // defaults, so it throws for real columns that were simply absent
+        // from the insert.
+        Model::preventLazyLoading();
+        Model::preventSilentlyDiscardingAttributes();
+
+        parent::setUp();
+    }
 
     protected function defineHasTeamEnvironment($app)
     {

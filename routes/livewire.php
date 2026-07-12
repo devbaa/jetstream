@@ -38,11 +38,16 @@ Route::group(['middleware' => config('jetstream.middleware', ['web'])], function
         ? 'auth:'.$guard
         : 'auth';
 
-    $authSessionMiddleware = config('jetstream.auth_session', false)
-        ? config('jetstream.auth_session')
+    $authSession = config('jetstream.auth_session', false);
+
+    $authSessionMiddleware = is_string($authSession) && $authSession !== ''
+        ? $authSession
         : null;
 
-    Route::group(['middleware' => array_filter([$authMiddleware, $authSessionMiddleware, 'account.active', 'throttle:jetstream'])], function () {
+    Route::group(['middleware' => array_filter(
+        [$authMiddleware, $authSessionMiddleware, 'account.active', 'throttle:jetstream'],
+        static fn (?string $middleware): bool => $middleware !== null
+    )], function () {
         // User & Profile...
         Route::get('/user/profile', [UserProfileController::class, 'show'])->name('profile.show');
 

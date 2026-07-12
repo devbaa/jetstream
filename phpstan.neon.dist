@@ -1,5 +1,6 @@
 includes:
   - vendor/larastan/larastan/extension.neon
+  - vendor/phpstan/phpstan-strict-rules/rules.neon
 
 parameters:
   paths:
@@ -9,6 +10,14 @@ parameters:
     - src
 
   level: max
+
+  checkModelProperties: true
+
+  strictRules:
+    # Eloquent's query builder and local scopes are @method-static
+    # forwarders that are always called dynamically; the framework idiom
+    # is incompatible with this rule.
+    dynamicCallOnStaticMethod: false
 
   ignoreErrors:
     - "#Unsafe usage of new static\\(\\)#"
@@ -27,6 +36,7 @@ parameters:
     # the generic authenticatable contract.
     - "#Call to an undefined method Illuminate\\\\Foundation\\\\Auth\\\\User::#"
     - "#Access to an undefined property Illuminate\\\\Foundation\\\\Auth\\\\User::#"
+    - "#model property of Illuminate\\\\Foundation\\\\Auth\\\\User#"
 
     # Sanctum's token model declares its attributes via casts only.
     - "#Access to an undefined property Laravel\\\\Sanctum\\\\PersonalAccessToken::\\$abilities#"
@@ -36,3 +46,12 @@ parameters:
     -
         identifier: larastan.noEnvCallsOutsideOfConfig
         path: config/jetstream.php
+
+    # PHPStan generalises constant arrays with more than eight entries to
+    # array<string, ...>, so the user factory's default state cannot be
+    # matched against the model-property list even though every key is a
+    # real column.
+    -
+        identifier: return.type
+        path: database/factories/UserFactory.php
+        count: 1

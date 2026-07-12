@@ -46,7 +46,11 @@ class AddUserToDomainTeams
 
         $master = $claim->user;
 
-        $team = $master?->personalTeam();
+        if (! $master instanceof \App\Models\User) {
+            return;
+        }
+
+        $team = $master->personalTeam();
 
         if ($team === null || $team->hasUser($user)) {
             return;
@@ -77,11 +81,13 @@ class AddUserToDomainTeams
             ->whereKeyNot($claim->user_id)
             ->whereNotNull('email_verified_at')
             ->where('is_system_admin', false)
-            ->whereRaw('lower(email) like ?', ['%@'.strtolower((string) $claim->domain)])
+            ->whereRaw('lower(email) like ?', ['%@'.strtolower($claim->domain)])
             ->get();
 
         foreach ($users as $user) {
-            $this->add($user);
+            if ($user instanceof \App\Models\User) {
+                $this->add($user);
+            }
         }
     }
 }

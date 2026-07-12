@@ -36,19 +36,19 @@ abstract class DomainClaim extends Model
      * The name under which verification tokens are published, both as the
      * prefix of the DNS TXT record value and as the meta tag name.
      */
-    public const VERIFICATION_NAME = 'jetstream-domain-verification';
+    public const string VERIFICATION_NAME = 'jetstream-domain-verification';
 
     /**
      * The table associated with the model.
      *
-     * @var string
+     * @var string|null
      */
     protected $table = 'domain_claims';
 
     /**
      * The attributes that are mass assignable.
      *
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'domain',
@@ -131,8 +131,8 @@ abstract class DomainClaim extends Model
     /**
      * Record a domain admin activity under this claim.
      *
-     * @param  \App\Models\User|null  $actor
-     * @param  \App\Models\User|null  $subject
+     * @param  \Illuminate\Foundation\Auth\User|null  $actor
+     * @param  \Illuminate\Foundation\Auth\User|null  $subject
      * @param  array<string, mixed>  $details
      * @return \Laravel\Jetstream\DomainActivity
      */

@@ -170,7 +170,7 @@ class TwoFactorAuthenticationForm extends Component
      */
     public function getEnabledProperty()
     {
-        return ! empty($this->user->two_factor_secret);
+        return $this->user->two_factor_secret !== null && $this->user->two_factor_secret !== '';
     }
 
     /**

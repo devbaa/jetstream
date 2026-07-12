@@ -33,7 +33,7 @@ class CustomerInvitationController extends Controller
 
         $user = Jetstream::findUserByEmailOrFail($invitation->email);
 
-        if ($invitation->customer_account_id) {
+        if ($invitation->customer_account_id !== null) {
             $account = $invitation->customerAccount()->withoutTenancy()->firstOrFail();
 
             $account->users()->attach($user);
@@ -69,11 +69,11 @@ class CustomerInvitationController extends Controller
 
         $user = Jetstream::currentUser();
 
-        $account = $invitation->customer_account_id
+        $account = $invitation->customer_account_id !== null
                         ? $invitation->customerAccount()->withoutTenancy()->first()
                         : null;
 
-        if (! ($account && $user->ownsCustomerAccount($account)) &&
+        if (! ($account !== null && $user->ownsCustomerAccount($account)) &&
             ! Gate::forUser($user)->check('manageCustomers', $invitation->tenant()->first())) {
             throw new AuthorizationException;
         }

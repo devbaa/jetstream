@@ -118,7 +118,7 @@ class UserManager extends Component
             'email' => $email,
             'password' => $this->createUserForm['password'] !== '' ? $this->createUserForm['password'] : null,
             'master_domains' => $masterDomains,
-        ], (bool) $this->createUserForm['send_reset_mail']);
+        ], $this->createUserForm['send_reset_mail']);
 
         $this->creatingUser = false;
 

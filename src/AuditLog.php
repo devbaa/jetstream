@@ -32,7 +32,7 @@ abstract class AuditLog extends Model
     /**
      * The table associated with the model.
      *
-     * @var string
+     * @var string|null
      */
     protected $table = 'audit_logs';
 

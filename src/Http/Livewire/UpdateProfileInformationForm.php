@@ -63,7 +63,7 @@ class UpdateProfileInformationForm extends Component
 
         $updater->update(
             Jetstream::currentUser(),
-            $this->photo
+            $this->photo !== null
                 ? array_merge($this->state, ['photo' => $this->photo])
                 : $this->state
         );

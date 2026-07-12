@@ -16,7 +16,7 @@ class CustomerAccountFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * @return array<model-property<\App\Models\CustomerAccount>, mixed>
      */
     public function definition(): array
     {

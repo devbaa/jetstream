@@ -94,7 +94,7 @@ class CustomerAccountManager extends Component
     {
         abort_unless($this->user->can('manageCustomers', $this->tenant), 403);
 
-        if (! empty($invitationId)) {
+        if ($invitationId !== '') {
             $this->tenant->customerInvitations()->whereKey($invitationId)->delete();
         }
 

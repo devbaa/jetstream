@@ -61,6 +61,8 @@ class CreateUser
         $user = DB::transaction(function () use ($input, $email, $password, $masterDomains, &$claims) {
             $user = Jetstream::newUserModel();
 
+            abort_unless($user instanceof \App\Models\User, 500);
+
             $user->forceFill([
                 'name' => $input['name'],
                 'email' => $email,

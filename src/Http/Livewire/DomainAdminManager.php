@@ -201,9 +201,10 @@ class DomainAdminManager extends Component
 
         UserBlocked::dispatch($subject);
 
-        $claim->recordActivity($this->user, 'member:blocked', $subject, array_filter([
-            'reason' => $this->blockReason !== '' ? $this->blockReason : null,
-        ]));
+        $claim->recordActivity($this->user, 'member:blocked', $subject, array_filter(
+            ['reason' => $this->blockReason !== '' ? $this->blockReason : null],
+            static fn (?string $value): bool => $value !== null
+        ));
 
         $this->confirmingMemberBlock = false;
 
@@ -298,17 +299,17 @@ class DomainAdminManager extends Component
     {
         $claim = $this->managedClaim;
 
-        if ($claim === null) {
-            return Jetstream::newUserModel()->newCollection();
-        }
+        $members = $claim === null
+            ? Jetstream::newUserModel()->newCollection()
+            : Jetstream::newUserModel()->newQuery()
+                ->whereKeyNot($this->user->getKey())
+                ->whereNotNull('email_verified_at')
+                ->where('is_system_admin', false)
+                ->where('email', 'like', '%@'.$claim->domain)
+                ->orderBy('name')
+                ->get();
 
-        return Jetstream::newUserModel()->newQuery()
-            ->whereKeyNot($this->user->getKey())
-            ->whereNotNull('email_verified_at')
-            ->where('is_system_admin', false)
-            ->where('email', 'like', '%@'.$claim->domain)
-            ->orderBy('name')
-            ->get();
+        return $members->whereInstanceOf(\App\Models\User::class)->values();
     }
 
     /**

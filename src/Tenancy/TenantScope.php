@@ -29,7 +29,7 @@ class TenantScope implements Scope
         $builder->where(function ($query) use ($model, $context) {
             $query->where($model->qualifyColumn('tenant_id'), $context->currentId());
 
-            if ($model->tenantOptional ?? false) {
+            if (property_exists($model, 'tenantOptional') && $model->tenantOptional === true) {
                 $query->orWhereNull($model->qualifyColumn('tenant_id'));
             }
         });
