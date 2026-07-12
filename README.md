@@ -47,7 +47,7 @@ This fork does **not** track upstream Jetstream releases; it is a self-contained
 | --- | --- |
 | PHP | ^8.4 |
 | Laravel | ^13.0 |
-| Livewire | ^3.6 |
+| Livewire | ^3.6 or ^4.0 |
 | Fortify | ^1.37 (passkeys) |
 | Stack | Livewire only (Inertia is not supported) |
 
@@ -61,7 +61,7 @@ cd my-saas
 
 # Point Composer at this fork and require it.
 composer config repositories.jetstream vcs https://github.com/devbaa/jetstream
-composer require laravel/jetstream:"dev-<branch> as 6.0"
+composer require devbaa/jetstream:"^6.0"
 
 # Scaffold everything (Livewire is the only supported stack).
 php artisan jetstream:install livewire

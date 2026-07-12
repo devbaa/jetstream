@@ -80,6 +80,11 @@ of every feature below.
 
 ### Changed
 
+- **Package renamed to `devbaa/jetstream`** — the composer package name now
+  reflects the fork (the `Laravel\Jetstream` PHP namespace is unchanged, so
+  consumers only update their require line and Tailwind vendor path).
+- **Livewire 4 supported** — the dev constraint is now `^3.6|^4.0` and the
+  test suite runs against Livewire 4.
 - **Livewire is the only supported stack** — the Inertia/Vue stack, its
   scaffolding, and related configuration have been removed.
 - **Laravel 13 / PHP 8.4 floor** with strict types throughout and static
