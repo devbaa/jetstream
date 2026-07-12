@@ -1,6 +1,6 @@
 {
-    "name": "laravel/jetstream",
-    "description": "Tailwind scaffolding for the Laravel framework.",
+    "name": "devbaa/jetstream",
+    "description": "Livewire-only, multi-tenant SaaS starter forked from Laravel Jetstream.",
     "keywords": [
         "laravel",
         "tailwind",
@@ -8,8 +8,8 @@
     ],
     "license": "MIT",
     "support": {
-        "issues": "https://github.com/laravel/jetstream/issues",
-        "source": "https://github.com/laravel/jetstream"
+        "issues": "https://github.com/devbaa/jetstream/issues",
+        "source": "https://github.com/devbaa/jetstream"
     },
     "authors": [
         {
@@ -29,7 +29,7 @@
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/sanctum": "^4.0",
-        "livewire/livewire": "^3.6",
+        "livewire/livewire": "^3.6|^4.0",
         "mockery/mockery": "^1.6",
         "orchestra/testbench": "^11.0"
     },
