@@ -274,6 +274,7 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2026_07_03_840000_add_blocking_and_freezing_columns.php' => database_path('migrations/2026_07_03_840000_add_blocking_and_freezing_columns.php'),
             __DIR__.'/../database/migrations/2026_07_03_850000_add_name_columns.php' => database_path('migrations/2026_07_03_850000_add_name_columns.php'),
             __DIR__.'/../database/migrations/2026_07_03_860000_add_phone_verification_columns.php' => database_path('migrations/2026_07_03_860000_add_phone_verification_columns.php'),
+            __DIR__.'/../database/migrations/2026_07_08_100000_normalize_recovery_emails.php' => database_path('migrations/2026_07_08_100000_normalize_recovery_emails.php'),
         ], 'jetstream-compliance-migrations');
 
         $this->publishes([

@@ -74,6 +74,13 @@ class UpdateRecoveryChannelsForm extends Component
 
         $user = $this->user;
 
+        // Canonicalize before validating so that the "must differ from your
+        // primary email" comparison and the stored value both work on the
+        // same form of the address, whatever casing was typed...
+        $this->state['recovery_email'] = Jetstream::normalizeEmail($this->state['recovery_email']) ?? '';
+
+        $primaryEmail = Jetstream::normalizeEmail($user->email);
+
         $validated = Validator::make($this->state, [
             'phone_country' => ['nullable', 'string', 'size:2', 'required_with:phone', function (string $attribute, mixed $value, \Closure $fail): void {
                 if (is_string($value) && $value !== '' && ! PhoneCountry::isValid($value)) {
@@ -81,7 +88,7 @@ class UpdateRecoveryChannelsForm extends Component
                 }
             }],
             'phone' => ['nullable', 'string', 'max:32', 'regex:/^[0-9\s\-().]{4,31}$/'],
-            'recovery_email' => ['nullable', 'string', 'email', 'max:255', \Illuminate\Validation\Rule::notIn([$user->email])],
+            'recovery_email' => ['nullable', 'string', 'email', 'max:255', \Illuminate\Validation\Rule::notIn($primaryEmail === null ? [] : [$primaryEmail])],
         ], [
             'phone.regex' => __('Enter the national number without the country code.'),
             'recovery_email.not_in' => __('Your recovery email must be different from your primary email address.'),
@@ -89,7 +96,7 @@ class UpdateRecoveryChannelsForm extends Component
 
         $country = is_string($validated['phone_country'] ?? null) && $validated['phone_country'] !== '' ? $validated['phone_country'] : null;
         $nationalNumber = is_string($validated['phone'] ?? null) && $validated['phone'] !== '' ? $validated['phone'] : null;
-        $recoveryEmail = is_string($validated['recovery_email'] ?? null) && $validated['recovery_email'] !== '' ? $validated['recovery_email'] : null;
+        $recoveryEmail = Jetstream::normalizeEmail(is_string($validated['recovery_email'] ?? null) ? $validated['recovery_email'] : null);
 
         $phone = null;
 
@@ -117,7 +124,7 @@ class UpdateRecoveryChannelsForm extends Component
         ])->save();
 
         if ($recoveryEmailChanged && $recoveryEmail !== null) {
-            Mail::to($recoveryEmail)->send(new RecoveryEmailVerification($user));
+            Mail::to($recoveryEmail)->queue(new RecoveryEmailVerification($user));
         }
 
         $this->dispatch('saved');
@@ -135,7 +142,7 @@ class UpdateRecoveryChannelsForm extends Component
         if (is_string($user->recovery_email) && $user->recovery_email_verified_at === null) {
             $this->rateLimit('recovery-email-verification', maxAttempts: 5, decaySeconds: 60);
 
-            Mail::to($user->recovery_email)->send(new RecoveryEmailVerification($user));
+            Mail::to($user->recovery_email)->queue(new RecoveryEmailVerification($user));
 
             $this->dispatch('recovery-email-verification-sent');
         }
