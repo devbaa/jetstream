@@ -27,7 +27,14 @@ class AccountRecoveryController extends Controller
      * Send a password reset link to the user's verified recovery email.
      *
      * The response is identical whether or not a matching account exists so
-     * that the endpoint cannot be used to enumerate recovery addresses.
+     * that the endpoint cannot be used to enumerate recovery addresses, and
+     * the mail is queued rather than delivered inline so that a matching
+     * address does not make the request measurably slower.
+     *
+     * The submitted address is reduced to the same canonical form recovery
+     * addresses are stored in, so the lookup succeeds whatever casing (or
+     * surrounding whitespace) the user typed — including on databases that
+     * compare strings case-sensitively.
      *
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\RedirectResponse
@@ -38,8 +45,10 @@ class AccountRecoveryController extends Controller
             'email' => ['required', 'string', 'email'],
         ]);
 
-        $user = Jetstream::newUserModel()->newQuery()
-            ->where('recovery_email', $request->string('email')->toString())
+        $recoveryEmail = Jetstream::normalizeEmail($request->string('email')->toString());
+
+        $user = $recoveryEmail === null ? null : Jetstream::newUserModel()->newQuery()
+            ->where('recovery_email', $recoveryEmail)
             ->whereNotNull('recovery_email_verified_at')
             ->first();
 
@@ -48,7 +57,7 @@ class AccountRecoveryController extends Controller
         if ($user instanceof \App\Models\User && $broker instanceof \Illuminate\Auth\Passwords\PasswordBroker) {
             $token = $broker->createToken($user);
 
-            Mail::to($user->recovery_email)->send(new AccountRecovery($user, $token));
+            Mail::to($user->recovery_email)->queue(new AccountRecovery($user, $token));
         }
 
         return back()->with('status', __('If that address is registered as a verified recovery email, we have sent it a password reset link.'));
