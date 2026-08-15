@@ -255,6 +255,8 @@ Two recovery channels, on top of the standard password reset:
 **Secondary (recovery) email**
 - Entered on the profile (must differ from the primary email). We send a signed verification link; **only verified recovery emails are usable**.
 - If locked out of the primary inbox, the guest `/account-recovery` page (enumeration-safe, throttled) emails a password reset link to the verified recovery address.
+- Addresses are stored **canonically** — trimmed and lower-cased via `Jetstream::normalizeEmail()` — and the recovery lookup normalizes its input the same way, so recovery works whatever casing was typed. This matters on PostgreSQL, whose `=` is case-sensitive: without it, an address saved as `User@Example.com` could never be matched by someone typing `user@example.com`. Write `recovery_email` through `Jetstream::normalizeEmail()` if your own code sets it directly.
+- Both recovery messages are **queued**, never delivered inline, so a request for a registered address is not measurably slower than one for an unknown address.
 
 **Phone number**
 - Entered with a **country selector** (full dial-code catalog in `Laravel\Jetstream\PhoneCountry`) and normalized to **E.164**.
