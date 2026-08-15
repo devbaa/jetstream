@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Jetstream\Http\Livewire\RoleManager;
 use Laravel\Jetstream\Jetstream;
+use Laravel\Jetstream\Tenancy\TenantContext;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -21,6 +22,11 @@ class RoleManagementTest extends TestCase
         $this->actingAs($user = User::factory()->withPersonalTeam()->create());
 
         $tenant = Tenant::factory()->create(['user_id' => $user->id]);
+
+        // Livewire component tests do not run through the "tenant.context"
+        // middleware, so the tenant context is established explicitly here;
+        // tenant scoped queries fail closed without it.
+        app(TenantContext::class)->set($tenant);
 
         Livewire::test(RoleManager::class, ['tenant' => $tenant])
             ->set('roleForm', [
@@ -41,6 +47,8 @@ class RoleManagementTest extends TestCase
 
         $tenant = Tenant::factory()->create(['user_id' => $user->id]);
 
+        app(TenantContext::class)->set($tenant);
+
         Livewire::test(RoleManager::class, ['tenant' => $tenant])
             ->call('editRole', 'staff')
             ->set('roleForm.name', 'Custom Staff')
@@ -54,6 +62,8 @@ class RoleManagementTest extends TestCase
         $this->actingAs($user = User::factory()->withPersonalTeam()->create());
 
         $tenant = Tenant::factory()->create(['user_id' => $user->id]);
+
+        app(TenantContext::class)->set($tenant);
 
         $role = $tenant->roles()->create([
             'key' => 'temp-role', 'name' => 'Temp', 'permissions' => ['read'],
@@ -71,6 +81,8 @@ class RoleManagementTest extends TestCase
         $user = User::factory()->withPersonalTeam()->create();
 
         $tenant = Tenant::factory()->create(['user_id' => $user->id]);
+
+        app(TenantContext::class)->set($tenant);
 
         $tenant->users()->attach(
             $staff = User::factory()->create(), ['role' => 'staff']

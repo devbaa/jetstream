@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Mail;
 use Laravel\Jetstream\Http\Livewire\Portal\AccountMemberManager;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Mail\CustomerInvitation;
+use Laravel\Jetstream\Tenancy\TenantContext;
 use Laravel\Jetstream\Tests\Fixtures\CustomerAccountPolicy;
 use Laravel\Jetstream\Tests\Fixtures\TenantPolicy;
 use Laravel\Jetstream\Tests\Fixtures\User;
@@ -65,6 +66,11 @@ class PortalAccountMemberManagerTest extends OrchestraTestCase
         ]);
 
         $account = (new CreateCustomerAccount)->create($tenant, $customer, ['name' => 'Jane Co']);
+
+        // The portal runs behind the "customer.context" middleware, which
+        // derives the tenant context from the selected account. Tenant scoped
+        // queries fail closed without it, so mirror that here.
+        app(TenantContext::class)->set($tenant);
 
         return [$customer->fresh(), $account];
     }

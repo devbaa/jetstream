@@ -36,6 +36,7 @@ This fork does **not** track upstream Jetstream releases; it is a self-contained
 - [Extension points](#extension-points)
 - [Database schema](#database-schema)
 - [Testing & quality gates](#testing--quality-gates)
+- [Upstream maintenance](#upstream-maintenance)
 - [Upgrade notes](#upgrade-notes)
 - [License](#license)
 
@@ -60,8 +61,9 @@ laravel new my-saas
 cd my-saas
 
 # Point Composer at this fork and require it.
+# No stable release has been tagged yet, so track the development branch.
 composer config repositories.jetstream vcs https://github.com/devbaa/jetstream
-composer require devbaa/jetstream:"^6.0"
+composer require devbaa/jetstream:"dev-main"
 
 # Scaffold everything (Livewire is the only supported stack).
 php artisan jetstream:install livewire
@@ -141,7 +143,7 @@ Because there is one `users` table, "being a customer" is a *relationship*, not 
 Single-database tenancy is enforced by a small, explicit toolkit:
 
 - **`TenantContext`** — a request-scoped (Octane/queue-safe) singleton holding the active tenant. Resolved by the `tenant.context` middleware, which self-heals stale state (revoked access, cross-tenant `current_team_id`).
-- **`BelongsToTenant`** — a trait for your own domain models. It adds a global scope (only rows for the current tenant) and auto-fills `tenant_id` on create. This is the main reusability payoff — drop it on any model:
+- **`BelongsToTenant`** — a trait for your own domain models. It adds a **fail-closed** global scope (only rows for the current tenant, and an exception when there is no tenant at all) and auto-fills `tenant_id` on create. This is the main reusability payoff — drop it on any model:
 
   ```php
   use Laravel\Jetstream\Tenancy\BelongsToTenant;
@@ -152,20 +154,32 @@ Single-database tenancy is enforced by a small, explicit toolkit:
   }
   ```
 
-- **Explicit escape hatches** — nothing is magic:
+- **Fail-closed scoping** — a tenant-scoped query built while **no** tenant is in context throws `Laravel\Jetstream\Tenancy\MissingTenantContextException` instead of running unscoped:
 
   ```php
-  // Run a closure with the tenant scope disabled (admin screens).
-  app(TenantContext::class)->bypass(fn () => Tenant::all());
+  Invoice::query()->get();   // no tenant context ⇒ MissingTenantContextException
+  ```
+
+  Missing context is a configuration bug (forgotten middleware, a job dispatched without its tenant), and the safe response to a configuration bug is a loud failure rather than a query that quietly returns every tenant's rows. The exception names the model and lists the escape hatches.
+
+- **Explicit escape hatches** — nothing is magic, and every cross-tenant operation has to say so:
+
+  ```php
+  // Run a closure with the tenant scope disabled (admin screens, purge, seeding).
+  app(TenantContext::class)->bypass(fn () => Invoice::all());
 
   // Run a queued job in a known tenant's context.
   app(TenantContext::class)->runFor($tenant, fn () => /* ... */);
 
-  // One-off unscoped query.
+  // One-off unscoped query — the narrowest hatch, affects this query only.
   Invoice::withoutTenancy()->get();
   ```
 
-> **Queued jobs run with an empty context** (the scope no-ops). Always wrap tenant-specific job work in `TenantContext::runFor($tenant, …)`.
+  `bypass()` and `runFor()` both restore the previous state in a `finally` block, so they nest safely and an exception thrown inside them cannot leak a stale context into the rest of the request.
+
+> **Queued jobs, listeners, and console commands start with an empty context**, so tenant-scoped queries there throw until you establish one. Wrap tenant-specific background work in `TenantContext::runFor($tenant, …)`, and mark genuinely system-wide work with `bypass()` or `withoutTenancy()`. Prefer the narrowest hatch that fits: `withoutTenancy()` on a single query over a `bypass()` around a block of code.
+
+**Tenant-optional models.** A model may declare `public $tenantOptional = true` (as the built-in `roles` model does) to mean "rows with a null `tenant_id` are shared defaults". Within a tenant context such a model resolves `tenant_id = <current> OR tenant_id IS NULL`. It is **not** a weaker form of scoping: with no context it fails closed exactly like every other tenant-scoped model, so the global defaults are reached through `withoutTenancy()` (see `RoleRegistry`) rather than by omitting the context.
 
 Teams are deliberately **not** globally scoped (that would break personal teams and `currentTeam()`); team access stays relation- and policy-constrained.
 
@@ -510,9 +524,41 @@ Migrations are published under the `jetstream-tenant-migrations`, `jetstream-com
 
 ---
 
+## Upstream maintenance
+
+This package has its own release cycle and is **not** release-compatible with upstream [Laravel Jetstream](https://github.com/laravel/jetstream):
+
+- It uses **its own semantic versions**. A version number here has no relationship to an upstream Jetstream version.
+- Selected upstream maintenance and security changes may be reviewed by hand and incorporated. Upstream releases are **never** merged automatically and are not drop-in upgrades — the architecture has diverged (Inertia removed, single install path, UUID v7 keys, multi-tenancy, Laravel 13 / PHP 8.4 floor), so every upstream change has to be re-read against this code.
+- The PHP classes intentionally stay in the `Laravel\Jetstream\` namespace, so **`laravel/jetstream` must not be installed alongside this package**. `composer.json` declares `"conflict": {"laravel/jetstream": "*"}` and Composer will refuse the combination.
+- Applications should depend on **`devbaa/jetstream`** directly. This package does not `replace` upstream Jetstream, so a third-party package that requires `laravel/jetstream` is not satisfied by it — that is deliberate, since the two are no longer interchangeable.
+
+### Releases
+
+No stable version has been tagged yet, so the documented install constraint is `dev-main` (aliased to `6.x-dev`). Once a stable tag exists, depend on the matching `^x.y` constraint instead.
+
+---
+
 ## Upgrade notes
 
-This fork intentionally diverges from upstream Jetstream (Inertia removed, single install path, UUID keys, Laravel 13/PHP 8.4 floor) and does not track upstream releases. Treat it as a standalone starter.
+**Tenant scoping now fails closed.** A query against a `BelongsToTenant` model built with **no** active `TenantContext` previously ran unscoped, returning every tenant's rows; it now throws `Laravel\Jetstream\Tenancy\MissingTenantContextException`. This is a deliberate, security-motivated breaking change.
+
+Code that runs outside a tenant-context request — queued jobs, listeners, console commands, schedulers, seeders, system administration screens — must state its intent:
+
+```php
+// Tenant-specific background work.
+app(TenantContext::class)->runFor($tenant, fn () => /* ... */);
+
+// Deliberately system-wide work.
+app(TenantContext::class)->bypass(fn () => /* ... */);
+
+// A single deliberately unscoped query.
+Invoice::withoutTenancy()->get();
+```
+
+Nothing else about the API changed: `bypass()`, `runFor()`, `withoutTenancy()` and `$tenantOptional` behave exactly as before when a tenant *is* in context.
+
+This fork intentionally diverges from upstream Jetstream (Inertia removed, single install path, UUID keys, Laravel 13/PHP 8.4 floor). Treat it as a standalone starter.
 
 ---
 

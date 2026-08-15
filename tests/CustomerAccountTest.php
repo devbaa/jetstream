@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Mail\CustomerInvitation;
+use Laravel\Jetstream\Tenancy\TenantContext;
 use Laravel\Jetstream\Tests\Fixtures\CustomerAccountPolicy;
 use Laravel\Jetstream\Tests\Fixtures\TenantPolicy;
 use Laravel\Jetstream\Tests\Fixtures\User;
@@ -87,11 +88,13 @@ class CustomerAccountTest extends OrchestraTestCase
 
         [$owner, $tenant] = $this->createOwnerAndTenant();
 
-        (new InviteCustomer)->invite($owner, $tenant, 'jane@example.com');
+        // Inviting reads the tenant's pending invitations, so it has to run
+        // in the tenant's context just as it does behind the middleware...
+        app(TenantContext::class)->runFor($tenant, fn () => (new InviteCustomer)->invite($owner, $tenant, 'jane@example.com'));
 
         Mail::assertSent(CustomerInvitation::class);
 
-        $invitation = $tenant->customerInvitations()->first();
+        $invitation = $tenant->customerInvitations()->withoutTenancy()->first();
 
         $this->assertNotNull($invitation);
         $this->assertNull($invitation->customer_account_id);
@@ -130,7 +133,7 @@ class CustomerAccountTest extends OrchestraTestCase
 
         $account = (new CreateCustomerAccount)->create($tenant, $customer, ['name' => 'Jane Co']);
 
-        (new InviteCustomer)->invite($customer->fresh(), $tenant, 'mate@example.com', $account);
+        app(TenantContext::class)->runFor($tenant, fn () => (new InviteCustomer)->invite($customer->fresh(), $tenant, 'mate@example.com', $account));
 
         Mail::assertSent(CustomerInvitation::class);
 

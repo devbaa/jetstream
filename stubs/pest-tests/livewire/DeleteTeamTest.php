@@ -21,7 +21,8 @@ test('teams can be deleted', function () {
     Livewire::test(DeleteTeamForm::class, ['team' => $team->fresh()])
         ->call('deleteTeam');
 
-    expect($team->fresh())->toBeNull();
+    // Teams are soft deleted; "jetstream:purge" erases them later.
+    expect($team->fresh()->trashed())->toBeTrue();
     expect($otherUser->fresh()->teams)->toHaveCount(0);
 });
 

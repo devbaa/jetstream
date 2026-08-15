@@ -111,6 +111,10 @@ class DatabaseRoleTest extends OrchestraTestCase
     {
         [$owner, $tenant] = $this->createOwnerAndTenant();
 
+        // Role management happens inside the owning tenant's context, which
+        // the "tenant.context" middleware establishes for real requests...
+        app(TenantContext::class)->set($tenant);
+
         Jetstream::permissions(['create', 'read', 'update', 'delete']);
 
         $role = (new CreateRole)->create($owner, $tenant, [
@@ -153,6 +157,8 @@ class DatabaseRoleTest extends OrchestraTestCase
     {
         [$owner, $tenant] = $this->createOwnerAndTenant();
 
+        app(TenantContext::class)->set($tenant);
+
         Jetstream::permissions(['read']);
 
         (new CreateRole)->create($owner, $tenant, [
@@ -169,6 +175,8 @@ class DatabaseRoleTest extends OrchestraTestCase
     public function test_roles_that_are_still_assigned_cannot_be_deleted()
     {
         [$owner, $tenant] = $this->createOwnerAndTenant();
+
+        app(TenantContext::class)->set($tenant);
 
         Jetstream::permissions(['read']);
 

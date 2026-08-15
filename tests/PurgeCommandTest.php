@@ -188,7 +188,7 @@ class PurgeCommandTest extends OrchestraTestCase
 
         $this->assertNull(Tenant::withTrashed()->find($tenant->id));
         $this->assertNotNull(Tenant::withTrashed()->find($recent->id));
-        $this->assertNull(CustomerAccount::withTrashed()->find($account->id));
+        $this->assertNull(CustomerAccount::withoutTenancy()->withTrashed()->find($account->id));
         $this->assertSame(0, DB::table('tenant_user')->count());
         $this->assertSame(0, DB::table('roles')->where('tenant_id', $tenant->id)->count());
         $this->assertSame(0, DB::table('customer_invitations')->count());
@@ -222,7 +222,7 @@ class PurgeCommandTest extends OrchestraTestCase
 
         $this->artisan('jetstream:purge')->assertSuccessful();
 
-        $this->assertNull(CustomerAccount::withTrashed()->find($account->id));
+        $this->assertNull(CustomerAccount::withoutTenancy()->withTrashed()->find($account->id));
         $this->assertNotNull(Tenant::find($tenant->id));
         $this->assertSame(0, DB::table('customer_account_user')->count());
         $this->assertSame(0, DB::table('customer_invitations')->count());
