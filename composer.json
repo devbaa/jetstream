@@ -26,6 +26,9 @@
         "mobiledetect/mobiledetectlib": "^4.8.08",
         "symfony/console": "^8.0"
     },
+    "conflict": {
+        "laravel/jetstream": "*"
+    },
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/sanctum": "^4.0",
@@ -47,6 +50,9 @@
         }
     },
     "extra": {
+        "branch-alias": {
+            "dev-main": "6.x-dev"
+        },
         "laravel": {
             "providers": [
                 "Laravel\\Jetstream\\JetstreamServiceProvider"

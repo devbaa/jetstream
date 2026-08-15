@@ -3,7 +3,7 @@ name: tests
 on:
   push:
     branches:
-      - master
+      - main
       - '*.x'
   pull_request:
   schedule:
@@ -53,26 +53,22 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        stack: [inertia, livewire]
-        laravel: ['11.x-dev', '12.x-dev', '13.x-dev']
+        test_style: [phpunit, pest]
 
-    name: Test Stubs - Laravel ${{ matrix.laravel }} - ${{ matrix.stack }}
+    name: Test Stubs - Laravel 13 - livewire - ${{ matrix.test_style }}
 
     steps:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: 8.3
+          php-version: 8.4
           extensions: dom, curl, libxml, mbstring, zip
           ini-values: error_reporting=E_ALL
           tools: composer:v2
           coverage: none
 
-      - name: Setup Laravel
-        run: |
-          composer create-project laravel/laravel:${{ matrix.laravel }} .
-          composer require laravel/jetstream:@dev --no-interaction --no-update
-          composer config repositories.jetstream '{"type": "path", "url": "jetstream"}' --file composer.json
+      - name: Create a Laravel application
+        run: composer create-project laravel/laravel:13.x-dev .
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,10 +76,21 @@ jobs:
           path: 'jetstream'
           persist-credentials: false
 
-      - name: Install Jetstream
+      - name: Require the checked out package
         run: |
-          composer update "laravel/jetstream" --prefer-dist --no-interaction --no-progress -W
-          php artisan jetstream:install ${{ matrix.stack }} --teams --api --verification --pest
+          composer config repositories.jetstream '{"type": "path", "url": "jetstream", "options": {"symlink": false}}' --file composer.json
+          composer require devbaa/jetstream:@dev --prefer-dist --no-interaction --no-progress -W
+
+      - name: Verify the package under test
+        run: |
+          composer show devbaa/jetstream
+          if composer show --name-only 2>/dev/null | grep -qx 'laravel/jetstream'; then
+            echo 'Upstream laravel/jetstream must not be installed alongside devbaa/jetstream.'
+            exit 1
+          fi
+
+      - name: Install Jetstream
+        run: php artisan jetstream:install livewire --api --verification ${{ matrix.test_style == 'pest' && '--pest' || '' }}
 
       - name: Install NPM dependencies
         run: npm i
@@ -92,7 +99,7 @@ jobs:
         run: npm run build
 
       - name: Execute tests
-        run: vendor/bin/pest
+        run: ${{ matrix.test_style == 'pest' && 'vendor/bin/pest' || 'vendor/bin/phpunit' }}
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ":memory:"

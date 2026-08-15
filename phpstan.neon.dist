@@ -46,12 +46,3 @@ parameters:
     -
         identifier: larastan.noEnvCallsOutsideOfConfig
         path: config/jetstream.php
-
-    # PHPStan generalises constant arrays with more than eight entries to
-    # array<string, ...>, so the user factory's default state cannot be
-    # matched against the model-property list even though every key is a
-    # real column.
-    -
-        identifier: return.type
-        path: database/factories/UserFactory.php
-        count: 1
