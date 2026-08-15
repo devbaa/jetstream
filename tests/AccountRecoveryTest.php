@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Laravel\Jetstream\Tests;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Laravel\Jetstream\Features;
@@ -448,6 +449,140 @@ class AccountRecoveryTest extends OrchestraTestCase
             return $mail->hasTo('second@laravel.com')
                 && str_contains($mail->verifyUrl, sha1('second@laravel.com'));
         });
+    }
+
+    public function test_an_address_verified_on_two_accounts_recovers_neither(): void
+    {
+        Mail::fake();
+
+        $first = $this->createUser();
+        $second = $this->createUser('adam@laravel.com');
+
+        foreach ([$first, $second] as $user) {
+            $user->forceFill([
+                'recovery_email' => 'shared@laravel.com',
+                'recovery_email_verified_at' => now(),
+            ])->save();
+        }
+
+        $response = $this->post('/account-recovery', ['email' => 'shared@laravel.com']);
+
+        // Outwardly indistinguishable from any other submission...
+        $response->assertSessionHas('status');
+        $response->assertSessionHasNoErrors();
+
+        // ...but no account is recovered, and in particular the database's
+        // row order does not get to pick one.
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
+
+        $this->assertSame(0, DB::table('password_reset_tokens')->count());
+    }
+
+    public function test_an_ambiguous_recovery_address_is_reported_to_the_operators(): void
+    {
+        Mail::fake();
+        Log::spy();
+
+        $first = $this->createUser();
+        $second = $this->createUser('adam@laravel.com');
+
+        foreach ([$first, $second] as $user) {
+            $user->forceFill([
+                'recovery_email' => 'shared@laravel.com',
+                'recovery_email_verified_at' => now(),
+            ])->save();
+        }
+
+        $this->post('/account-recovery', ['email' => 'shared@laravel.com'])
+            ->assertSessionHas('status');
+
+        Log::shouldHaveReceived('warning')->once()->withArgs(
+            function (string $message, array $context) use ($first, $second): bool {
+                $ids = $context['user_ids'];
+                sort($ids);
+                $expected = [$first->id, $second->id];
+                sort($expected);
+
+                return str_contains($message, 'more than one account')
+                    && $ids === $expected
+                    && ! str_contains($message.json_encode($context), 'shared@laravel.com');
+            }
+        );
+    }
+
+    public function test_an_unambiguous_address_is_unaffected_by_the_duplicate_guard(): void
+    {
+        Mail::fake();
+        Log::spy();
+
+        $user = $this->createUser();
+        $other = $this->createUser('adam@laravel.com');
+
+        $user->forceFill([
+            'recovery_email' => 'backup@laravel.com',
+            'recovery_email_verified_at' => now(),
+        ])->save();
+
+        // The same address on another account, but unverified, so it is not
+        // a candidate and does not make the address ambiguous...
+        $other->forceFill(['recovery_email' => 'backup@laravel.com'])->save();
+
+        $this->post('/account-recovery', ['email' => 'backup@laravel.com'])
+            ->assertSessionHas('status');
+
+        Mail::assertQueued(AccountRecovery::class, function (AccountRecovery $mail) use ($user): bool {
+            return $mail->user->is($user);
+        });
+
+        Log::shouldNotHaveReceived('warning');
+    }
+
+    public function test_the_migration_reports_the_collisions_it_creates(): void
+    {
+        Log::spy();
+
+        $first = $this->createUser();
+        $second = $this->createUser('adam@laravel.com');
+
+        // Two spellings of one address, distinct until they are canonicalized...
+        DB::table('users')->where('id', $first->id)->update([
+            'recovery_email' => 'Shared@Laravel.com',
+            'recovery_email_verified_at' => now(),
+        ]);
+
+        DB::table('users')->where('id', $second->id)->update([
+            'recovery_email' => 'shared@laravel.com',
+            'recovery_email_verified_at' => now(),
+        ]);
+
+        $this->normalizeRecoveryEmails();
+
+        Log::shouldHaveReceived('warning')->once()->withArgs(
+            function (string $message, array $context) use ($first, $second): bool {
+                return str_contains($message, 'more than one account')
+                    && count($context['user_ids']) === 2
+                    && in_array($first->id, $context['user_ids'], true)
+                    && in_array($second->id, $context['user_ids'], true)
+                    && ! str_contains($message.json_encode($context), 'shared@laravel.com');
+            }
+        );
+    }
+
+    public function test_the_migration_stays_quiet_when_it_creates_no_collisions(): void
+    {
+        Log::spy();
+
+        $user = $this->createUser();
+
+        DB::table('users')->where('id', $user->id)->update([
+            'recovery_email' => 'Recovery.User@Example.COM',
+            'recovery_email_verified_at' => now(),
+        ]);
+
+        $this->normalizeRecoveryEmails();
+
+        Log::shouldNotHaveReceived('warning');
     }
 
     /**
