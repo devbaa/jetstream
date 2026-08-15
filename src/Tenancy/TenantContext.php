@@ -101,7 +101,9 @@ class TenantContext
      * Execute the given callback within the context of the given tenant.
      *
      * Queued jobs and other code running outside an HTTP request have no
-     * tenant context and therefore run unscoped unless wrapped in this method.
+     * tenant context, and tenant scoped queries throw a
+     * MissingTenantContextException there, so tenant specific background work
+     * must be wrapped in this method.
      *
      * @template TReturn
      *

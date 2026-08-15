@@ -44,6 +44,10 @@ trait BelongsToTenant
     /**
      * Query the model without the tenant scope applied.
      *
+     * This is the narrowest escape hatch for an intentional cross-tenant
+     * query: it removes the scope from this query only, leaving every other
+     * model and query fail-closed.
+     *
      * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
      * @return \Illuminate\Database\Eloquent\Builder<static>
      */

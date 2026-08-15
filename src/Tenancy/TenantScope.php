@@ -16,23 +16,36 @@ class TenantScope implements Scope
     /**
      * Apply the scope to a given Eloquent query builder.
      *
+     * The scope fails closed. When no tenant is in context the query is not
+     * silently left unscoped — which would expose every tenant's rows — but
+     * rejected with a MissingTenantContextException. Code that legitimately
+     * operates across tenants must say so explicitly through
+     * TenantContext::bypass() or the model's withoutTenancy() scope.
+     *
      * @return void
+     *
+     * @throws \Laravel\Jetstream\Tenancy\MissingTenantContextException
      */
     public function apply(Builder $builder, Model $model)
     {
         $context = app(TenantContext::class);
 
-        if ($context->shouldBypass() || is_null($context->currentId())) {
+        if ($context->shouldBypass()) {
             return;
         }
 
-        $builder->where(function ($query) use ($model, $context) {
-            $query->where($model->qualifyColumn('tenant_id'), $context->currentId());
+        $tenantId = $context->currentId();
+
+        if (is_null($tenantId)) {
+            throw MissingTenantContextException::forModel($model);
+        }
+
+        $builder->where(function ($query) use ($model, $tenantId) {
+            $query->where($model->qualifyColumn('tenant_id'), $tenantId);
 
             if (property_exists($model, 'tenantOptional') && $model->tenantOptional === true) {
                 $query->orWhereNull($model->qualifyColumn('tenant_id'));
             }
         });
     }
-
 }
