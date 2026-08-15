@@ -243,13 +243,20 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/0001_01_01_000000_create_users_table.php' => database_path('migrations/0001_01_01_000000_create_users_table.php'),
         ], 'jetstream-migrations');
 
-        $this->publishesMigrations([
+        // These use publishes() rather than publishesMigrations() on purpose.
+        // publishesMigrations() re-stamps every published file with the current
+        // date-time, restarting from "now" for each tag, which interleaves the
+        // tags and can run an ALTER TABLE migration (soft deletes, tenant
+        // columns) before the CREATE TABLE it depends on. Publishing to the
+        // explicit destination names keeps the package's own, dependency
+        // ordered sequence — the same order the package test suite migrates in.
+        $this->publishes([
             __DIR__.'/../database/migrations/2020_05_21_100000_create_teams_table.php' => database_path('migrations/2020_05_21_100000_create_teams_table.php'),
             __DIR__.'/../database/migrations/2020_05_21_200000_create_team_user_table.php' => database_path('migrations/2020_05_21_200000_create_team_user_table.php'),
             __DIR__.'/../database/migrations/2020_05_21_300000_create_team_invitations_table.php' => database_path('migrations/2020_05_21_300000_create_team_invitations_table.php'),
         ], 'jetstream-team-migrations');
 
-        $this->publishesMigrations([
+        $this->publishes([
             __DIR__.'/../database/migrations/2026_07_03_100000_create_tenants_table.php' => database_path('migrations/2026_07_03_100000_create_tenants_table.php'),
             __DIR__.'/../database/migrations/2026_07_03_200000_create_tenant_user_table.php' => database_path('migrations/2026_07_03_200000_create_tenant_user_table.php'),
             __DIR__.'/../database/migrations/2026_07_03_300000_create_roles_table.php' => database_path('migrations/2026_07_03_300000_create_roles_table.php'),
@@ -259,7 +266,7 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2026_07_03_700000_create_customer_invitations_table.php' => database_path('migrations/2026_07_03_700000_create_customer_invitations_table.php'),
         ], 'jetstream-tenant-migrations');
 
-        $this->publishesMigrations([
+        $this->publishes([
             __DIR__.'/../database/migrations/2026_07_03_800000_create_audit_logs_table.php' => database_path('migrations/2026_07_03_800000_create_audit_logs_table.php'),
             __DIR__.'/../database/migrations/2026_07_03_810000_create_data_requests_table.php' => database_path('migrations/2026_07_03_810000_create_data_requests_table.php'),
             __DIR__.'/../database/migrations/2026_07_03_820000_add_soft_delete_columns.php' => database_path('migrations/2026_07_03_820000_add_soft_delete_columns.php'),
@@ -269,7 +276,7 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2026_07_03_860000_add_phone_verification_columns.php' => database_path('migrations/2026_07_03_860000_add_phone_verification_columns.php'),
         ], 'jetstream-compliance-migrations');
 
-        $this->publishesMigrations([
+        $this->publishes([
             __DIR__.'/../database/migrations/2026_07_07_100000_create_domain_claims_table.php' => database_path('migrations/2026_07_07_100000_create_domain_claims_table.php'),
             __DIR__.'/../database/migrations/2026_07_07_200000_create_domain_activities_table.php' => database_path('migrations/2026_07_07_200000_create_domain_activities_table.php'),
         ], 'jetstream-domain-migrations');

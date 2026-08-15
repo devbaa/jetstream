@@ -14,7 +14,8 @@ test('user accounts can be deleted', function () {
         ->set('password', 'password')
         ->call('deleteUser');
 
-    expect($user->fresh())->toBeNull();
+    // Users are soft deleted; "jetstream:purge" erases them later.
+    expect($user->fresh()->trashed())->toBeTrue();
 })->skip(function () {
     return ! Features::hasAccountDeletionFeatures();
 }, 'Account deletion is not enabled.');

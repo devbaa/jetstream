@@ -64,8 +64,11 @@ class InstallCommand extends Command implements PromptsForMissingInput
 
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-config', '--force' => true]);
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-support', '--force' => true]);
+        // Fortify's migration tag already publishes the passkeys table
+        // migration. Publishing the "passkeys-migrations" tag as well would
+        // write a second copy under a fresh timestamp, and the duplicate
+        // fails the very next "php artisan migrate".
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
-        $this->callSilent('vendor:publish', ['--tag' => 'passkeys-migrations', '--force' => true]);
 
         // Storage...
         $this->callSilent('storage:link');

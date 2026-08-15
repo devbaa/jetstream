@@ -30,7 +30,8 @@ class DeleteTeamTest extends TestCase
         Livewire::test(DeleteTeamForm::class, ['team' => $team->fresh()])
             ->call('deleteTeam');
 
-        $this->assertNull($team->fresh());
+        // Teams are soft deleted; "jetstream:purge" erases them later.
+        $this->assertTrue($team->fresh()->trashed());
         $this->assertCount(0, $otherUser->fresh()->teams);
     }
 
