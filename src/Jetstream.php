@@ -6,6 +6,7 @@ namespace Laravel\Jetstream;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Laravel\Jetstream\Contracts\AddsTeamMembers;
 use Laravel\Jetstream\Contracts\AddsTenantStaff;
 use Laravel\Jetstream\Contracts\CreatesCustomerAccounts;
@@ -1143,6 +1144,30 @@ class Jetstream
         ], function ($path) {
             return file_exists($path);
         });
+    }
+
+    /**
+     * Reduce an email address to the canonical form Jetstream stores and compares.
+     *
+     * Addresses are trimmed and lower-cased so that a single stored value can
+     * be matched with an ordinary equality comparison on every supported
+     * database. PostgreSQL compares strings case-sensitively, so relying on
+     * the database's collation would leave "User@Example.com" unable to match
+     * a row stored as "user@example.com".
+     *
+     * This is deliberately not RFC-level mailbox canonicalization: it matches
+     * the trim-and-lower convention the package already uses for primary
+     * email addresses. An empty result is treated as no address at all.
+     */
+    public static function normalizeEmail(?string $email): ?string
+    {
+        if ($email === null) {
+            return null;
+        }
+
+        $normalized = Str::lower(trim($email));
+
+        return $normalized === '' ? null : $normalized;
     }
 
     /**
