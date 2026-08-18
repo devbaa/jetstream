@@ -52,7 +52,9 @@ return new class extends Migration
      *
      * The addresses themselves are left out of the log; the user ids are
      * enough to resolve the conflict without writing recovery addresses into
-     * the application's log files.
+     * the application's log files. They are reported grouped, because a flat
+     * list of ids would not tell an operator which accounts conflict with
+     * which — the one thing they need in order to act on it.
      */
     protected function reportAmbiguousAddresses(): void
     {
@@ -68,16 +70,20 @@ return new class extends Migration
             return;
         }
 
-        $userIds = DB::table('users')
+        $groups = DB::table('users')
+            ->select('id', 'recovery_email')
             ->whereIn('recovery_email', $duplicated->all())
             ->whereNotNull('recovery_email_verified_at')
-            ->orderBy('recovery_email')
-            ->pluck('id');
+            ->get()
+            ->groupBy('recovery_email')
+            ->map(static fn ($rows) => $rows->pluck('id')->values()->all())
+            ->values()
+            ->all();
 
         Log::warning(sprintf(
             'Normalizing recovery email addresses left %d address(es) verified on more than one account. Those accounts cannot be recovered by recovery email until the duplicates are resolved.',
-            $duplicated->count()
-        ), ['user_ids' => $userIds->all()]);
+            count($groups)
+        ), ['conflicting_user_id_groups' => $groups]);
     }
 
     /**

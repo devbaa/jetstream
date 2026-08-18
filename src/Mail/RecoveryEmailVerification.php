@@ -22,20 +22,24 @@ class RecoveryEmailVerification extends Mailable implements ShouldQueue
     public $user;
 
     /**
-     * The signed link that verifies the address this message is sent to.
+     * The address this message verifies.
      *
      * @var string
      */
-    public $verifyUrl;
+    public $recoveryEmail;
 
     /**
      * Create a new message instance.
      *
-     * The link is signed here rather than while the message is being built,
-     * because the message is delivered by a queue worker: building it later
-     * would sign whatever address the user happens to have on record by
-     * then, so a message already on its way to the previous address could
-     * carry a link verifying a newer one.
+     * The address is captured here rather than read back off the user when
+     * the message is built, because the message is delivered by a queue
+     * worker: reading it later would pick up whatever address the user
+     * happens to have on record by then, so a message already on its way to
+     * the previous address could carry a link verifying a newer one.
+     *
+     * The link itself is still signed at build time. Signing it here instead
+     * would put a working credential in the queue payload and start its
+     * expiry when the message was enqueued rather than when it was sent.
      *
      * @param  \App\Models\User  $user
      * @return void
@@ -43,21 +47,27 @@ class RecoveryEmailVerification extends Mailable implements ShouldQueue
     public function __construct($user)
     {
         $this->user = $user;
-
-        $this->verifyUrl = URL::temporarySignedRoute('recovery-email.verify', now()->addMinutes(60), [
-            'user' => $user->id,
-            'hash' => sha1((string) $user->recovery_email),
-        ]);
+        $this->recoveryEmail = (string) $user->recovery_email;
     }
 
     /**
      * Build the message.
      *
+     * The hash binds the link to the address that was current when the
+     * message was created. Verification compares it against the address on
+     * record at the time the link is followed, so a link for a superseded
+     * address is inert.
+     *
      * @return $this
      */
     public function build()
     {
-        return $this->markdown('emails.recovery-email-verification', ['verifyUrl' => $this->verifyUrl])
+        $verifyUrl = URL::temporarySignedRoute('recovery-email.verify', now()->addMinutes(60), [
+            'user' => $this->user->id,
+            'hash' => sha1($this->recoveryEmail),
+        ]);
+
+        return $this->markdown('emails.recovery-email-verification', ['verifyUrl' => $verifyUrl])
             ->subject(__('Verify Recovery Email'));
     }
 }
