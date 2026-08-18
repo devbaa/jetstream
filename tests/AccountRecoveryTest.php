@@ -441,13 +441,11 @@ class AccountRecoveryTest extends OrchestraTestCase
             ->assertHasNoErrors();
 
         Mail::assertQueued(RecoveryEmailVerification::class, function (RecoveryEmailVerification $mail): bool {
-            return $mail->hasTo('first@laravel.com')
-                && str_contains($mail->verifyUrl, sha1('first@laravel.com'));
+            return $mail->hasTo('first@laravel.com') && $mail->recoveryEmail === 'first@laravel.com';
         });
 
         Mail::assertQueued(RecoveryEmailVerification::class, function (RecoveryEmailVerification $mail): bool {
-            return $mail->hasTo('second@laravel.com')
-                && str_contains($mail->verifyUrl, sha1('second@laravel.com'));
+            return $mail->hasTo('second@laravel.com') && $mail->recoveryEmail === 'second@laravel.com';
         });
     }
 
@@ -560,11 +558,70 @@ class AccountRecoveryTest extends OrchestraTestCase
 
         Log::shouldHaveReceived('warning')->once()->withArgs(
             function (string $message, array $context) use ($first, $second): bool {
+                $groups = $context['conflicting_user_id_groups'];
+                $ids = $groups[0] ?? [];
+                sort($ids);
+                $expected = [$first->id, $second->id];
+                sort($expected);
+
+                // Grouped, so an operator can see which accounts collide.
                 return str_contains($message, 'more than one account')
-                    && count($context['user_ids']) === 2
-                    && in_array($first->id, $context['user_ids'], true)
-                    && in_array($second->id, $context['user_ids'], true)
+                    && count($groups) === 1
+                    && $ids === $expected
                     && ! str_contains($message.json_encode($context), 'shared@laravel.com');
+            }
+        );
+    }
+
+    public function test_the_migration_reports_each_colliding_address_as_its_own_group(): void
+    {
+        Log::spy();
+
+        $users = [];
+
+        foreach ([
+            ['a@laravel.com', 'Shared.One@Laravel.com'],
+            ['b@laravel.com', 'shared.one@laravel.com'],
+            ['c@laravel.com', 'Shared.Two@Laravel.com'],
+            ['d@laravel.com', 'shared.two@laravel.com'],
+            ['e@laravel.com', 'unique@laravel.com'],
+        ] as [$primary, $recovery]) {
+            $user = $this->createUser($primary);
+
+            DB::table('users')->where('id', $user->id)->update([
+                'recovery_email' => $recovery,
+                'recovery_email_verified_at' => now(),
+            ]);
+
+            $users[$primary] = $user->id;
+        }
+
+        $this->normalizeRecoveryEmails();
+
+        Log::shouldHaveReceived('warning')->once()->withArgs(
+            function (string $message, array $context) use ($users): bool {
+                $groups = array_map(function (array $ids): array {
+                    sort($ids);
+
+                    return $ids;
+                }, $context['conflicting_user_id_groups']);
+
+                sort($groups);
+
+                $expected = [
+                    [$users['a@laravel.com'], $users['b@laravel.com']],
+                    [$users['c@laravel.com'], $users['d@laravel.com']],
+                ];
+
+                foreach ($expected as &$group) {
+                    sort($group);
+                }
+
+                unset($group);
+                sort($expected);
+
+                // Two conflicts, kept apart; the unique address is absent.
+                return str_contains($message, '2 address(es)') && $groups === $expected;
             }
         );
     }
@@ -593,6 +650,27 @@ class AccountRecoveryTest extends OrchestraTestCase
         $migration = require __DIR__.'/../database/migrations/2026_07_08_100000_normalize_recovery_emails.php';
 
         $migration->up();
+    }
+
+    public function test_a_queued_verification_message_carries_no_signed_link(): void
+    {
+        Mail::fake();
+
+        $user = $this->createUser();
+
+        $this->actingAs($user);
+
+        Livewire::test(UpdateRecoveryChannelsForm::class)
+            ->set('state.recovery_email', 'backup@laravel.com')
+            ->call('updateRecoveryChannels')
+            ->assertHasNoErrors();
+
+        // The link is signed when the message is built, not when it is
+        // queued, so a working credential never sits in the queue payload
+        // and its lifetime starts when it is actually sent.
+        Mail::assertQueued(RecoveryEmailVerification::class, function (RecoveryEmailVerification $mail): bool {
+            return ! str_contains(serialize($mail), 'signature=');
+        });
     }
 
     public function test_the_recovery_routes_are_registered_for_guests(): void
