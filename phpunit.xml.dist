@@ -15,5 +15,13 @@
     </testsuites>
     <php>
         <server name="APP_KEY" value="AckfSECXIvnK5r28GVIWUAxmbBSjTsmF"/>
+        <!--
+            Testbench's auth config reads AUTH_MODEL, and Fortify reads that
+            config while registering — before any per-test environment hook
+            runs — to tell the passkeys package which user model to build its
+            foreign key against. Setting it here is what a real application
+            does, and keeps the suite's schema the same shape as a real one's.
+        -->
+        <env name="AUTH_MODEL" value="App\Models\User"/>
     </php>
 </phpunit>

@@ -10,11 +10,9 @@ use Laravel\Fortify\FortifyServiceProvider;
 use Laravel\Jetstream\Features;
 use Laravel\Jetstream\JetstreamServiceProvider;
 use Livewire\LivewireServiceProvider;
-use Orchestra\Testbench\Attributes\WithConfig;
 use Orchestra\Testbench\Concerns\WithWorkbench;
 use Orchestra\Testbench\TestCase;
 
-#[WithConfig('database.default', 'testing')]
 abstract class OrchestraTestCase extends TestCase
 {
     use LazilyRefreshDatabase, WithWorkbench;
@@ -30,6 +28,25 @@ abstract class OrchestraTestCase extends TestCase
         Model::preventSilentlyDiscardingAttributes();
 
         parent::setUp();
+    }
+
+    /**
+     * Set up the environment every test class shares.
+     *
+     * Testbench calls this alongside defineEnvironment(), which the test
+     * classes themselves override, so shared setup lives here where it
+     * cannot be overwritten by a subclass forgetting to call the parent.
+     *
+     * @param  \Illuminate\Foundation\Application  $app
+     * @return void
+     */
+    #[\Override]
+    protected function getEnvironmentSetUp($app)
+    {
+        // Testbench's in-memory sqlite connection stays the default, but an
+        // explicit DB_CONNECTION wins so the suite can be pointed at a real
+        // server (the PostgreSQL CI job) instead of being pinned to sqlite.
+        $app->config->set('database.default', env('DB_CONNECTION', 'testing'));
     }
 
     protected function defineHasTeamEnvironment($app)
