@@ -89,10 +89,28 @@ jobs:
             exit 1
           fi
 
-      # "composer create-project" migrates the application it creates, which
-      # would leave Laravel's own users table in place — the installer refuses
-      # to migrate onto that, by design. Start from an unmigrated database so
-      # this job exercises a genuinely fresh install.
+      # "composer create-project" migrates the application it creates, so at
+      # this point it carries Laravel's own users table — the exact condition
+      # that silently produced a broken schema. Pin the refusal here, on the
+      # real generated application, before wiping for the clean install below.
+      - name: Refuse to install onto a pre-migrated application
+        run: |
+          if php artisan jetstream:install livewire --api --verification; then
+            echo 'The installer accepted a users table it did not create.'
+            exit 1
+          fi
+          php -r '
+            $columns = array_column(
+              (new PDO("sqlite:database/database.sqlite"))
+                ->query("pragma table_info(users)")->fetchAll(PDO::FETCH_ASSOC),
+              "name"
+            );
+            if (in_array("profile_photo_path", $columns, true)) {
+              fwrite(STDERR, "The refused install modified the users table.\n");
+              exit(1);
+            }
+          '
+
       - name: Reset the application database
         run: php artisan db:wipe --force
 

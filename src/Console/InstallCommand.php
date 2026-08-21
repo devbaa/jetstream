@@ -67,17 +67,23 @@ class InstallCommand extends Command implements PromptsForMissingInput
             return 1;
         }
 
+        // Migrations first, and then the compatibility check, before anything
+        // in the application has been touched. The check tells the operator to
+        // rebuild with "migrate:fresh", which needs every migration on disk to
+        // build the right schema — but nothing else here needs to have run, and
+        // refusing after the application had been rewritten would leave it half
+        // installed.
+        $this->publishMigrations();
+
+        if (! $this->ensureUsersTableCanBeMigrated()) {
+            return 1;
+        }
+
         // Publish...
         $this->callSilent('vendor:publish', ['--tag' => 'jetstream-config', '--force' => true]);
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-migrations', '--force' => true]);
 
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-config', '--force' => true]);
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-support', '--force' => true]);
-        // Fortify's migration tag already publishes the passkeys table
-        // migration. Publishing the "passkeys-migrations" tag as well would
-        // write a second copy under a fresh timestamp, and the duplicate
-        // fails the very next "php artisan migrate".
-        $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
 
         // Storage...
         $this->callSilent('storage:link');
@@ -138,6 +144,30 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/RegistrationTest.php', base_path('tests/Feature/RegistrationTest.php'));
 
         return $this->migrationsWereBlocked ? 1 : 0;
+    }
+
+    /**
+     * Publish every migration this package contributes to the application.
+     *
+     * @return void
+     */
+    protected function publishMigrations()
+    {
+        // Fortify's migration tag already publishes the passkeys table
+        // migration. Publishing the "passkeys-migrations" tag as well would
+        // write a second copy under a fresh timestamp, and the duplicate
+        // fails the very next "php artisan migrate". Its tag also re-stamps
+        // every file it publishes, so it must be published exactly once.
+        foreach ([
+            'jetstream-migrations',
+            'jetstream-team-migrations',
+            'jetstream-tenant-migrations',
+            'jetstream-compliance-migrations',
+            'jetstream-domain-migrations',
+            'fortify-migrations',
+        ] as $tag) {
+            $this->callSilent('vendor:publish', ['--tag' => $tag, '--force' => true]);
+        }
     }
 
     /**
@@ -329,7 +359,6 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/livewire/UpdateTeamNameTest.php', base_path('tests/Feature/UpdateTeamNameTest.php'));
 
         // Publish Team Migrations...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-team-migrations', '--force' => true]);
 
         // Configuration...
         $this->replaceInFile('// Features::teams([\'invitations\' => true])', 'Features::teams([\'invitations\' => true])', config_path('jetstream.php'));
@@ -400,13 +429,10 @@ class InstallCommand extends Command implements PromptsForMissingInput
     protected function ensureApplicationIsSaasCompatible()
     {
         // Publish Tenant Migrations...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-tenant-migrations', '--force' => true]);
 
         // Publish Compliance Migrations (audit logs, data requests, soft deletes, recovery)...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-compliance-migrations', '--force' => true]);
 
         // Publish Domain Admin Migrations (domain claims, domain activity)...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-domain-migrations', '--force' => true]);
 
         // Configuration...
         $this->replaceInFile('// Features::tenants([\'portal\' => true, \'customer-registration\' => true])', 'Features::tenants([\'portal\' => true, \'customer-registration\' => true])', config_path('jetstream.php'));
@@ -681,96 +707,142 @@ EOF;
      * Make sure Jetstream's replacement users table migration will actually run.
      *
      * Jetstream replaces Laravel's own users table migration, publishing over
-     * it under the same file name so that the table is created with a UUID
-     * primary key. Laravel records a migration by that name, though, so if the
-     * application had already migrated — which "laravel new" and
-     * "composer create-project" both offer to do — the replacement is silently
-     * skipped and the auto-incrementing key survives, while every table that
-     * references users is built expecting a UUID. Nothing fails until
-     * something reads a column that was never added, usually the seeder.
+     * it under the same file name. Laravel records a migration by that name,
+     * though, so if the application had already migrated — which "laravel new"
+     * and "composer create-project" both offer to do — the replacement is
+     * silently skipped, and the table keeps whatever shape it already had
+     * while everything referencing it is built for Jetstream's. Nothing fails
+     * until something reads a column that was never added, usually the seeder.
      *
      * The database is never repaired here. Rebuilding it drops every table,
      * and an application can hold data this command knows nothing about, so
-     * the operator is told what to run and installation stops short of
-     * migrating. The migrations have already been published by this point,
-     * which is what "migrate:fresh" needs in order to build the right schema.
+     * the operator is told what to run and installation stops.
      *
-     * @return bool  whether the caller should go on to run migrations
+     * @return bool  whether installation should continue
      */
     protected function ensureUsersTableCanBeMigrated()
     {
         try {
-            if (! Schema::hasTable('users') || ! $this->usersTableKeyIsIncompatible()) {
+            if (! Schema::hasTable('users')) {
                 return true;
             }
+
+            $mismatch = static::usersTableMismatch(Schema::getColumns('users'));
         } catch (Throwable) {
             // The database cannot be inspected — it may not exist yet. Leave
             // the decision to "artisan migrate" as before.
             return true;
         }
 
+        if ($mismatch === null) {
+            return true;
+        }
+
         $this->migrationsWereBlocked = true;
 
-        $this->components->error(
-            'Your users table has an auto-incrementing key, so it was not created by Jetstream, which needs a UUID '
-            .'key. Laravel never re-runs a migration it has already recorded, so the users table migration Jetstream '
-            .'just published would be skipped and the mismatch would survive.'
-        );
+        $this->components->error(sprintf(
+            'Your users table was not created by Jetstream: %s. Laravel never re-runs a migration it has already '
+            .'recorded, so the users table migration Jetstream publishes would be skipped and the mismatch would '
+            .'survive.',
+            $mismatch
+        ));
 
         $this->components->warn(
-            'Nothing has been migrated. Once you have backed up or discarded the data in this database, rebuild it '
-            .'from the published migrations with "php artisan migrate:fresh --seed". That drops every table.'
+            'Nothing has been installed or migrated. The migrations have been published, so once you have backed up '
+            .'or discarded the data in this database you can rebuild it with "php artisan migrate:fresh --seed" and '
+            .'run this command again. That drops every table.'
         );
 
         return false;
     }
 
     /**
-     * Determine if the users table is keyed by an integer rather than a UUID.
+     * Describe how the users table differs from the one Jetstream creates.
      *
-     * @return bool
+     * The check is positive: it recognises the shape this package's migration
+     * produces rather than ruling out shapes it does not. Both halves matter.
+     * Upstream Laravel Jetstream creates profile_photo_path and
+     * current_team_id over an auto-incrementing key, so those columns alone
+     * prove nothing; and a table can carry a UUID key while still missing the
+     * columns, which is the same skipped migration by another route.
+     *
+     * @param  iterable<mixed>  $columns
+     * @return string|null  the mismatch, or null when the table matches
      */
-    protected function usersTableKeyIsIncompatible()
+    public static function usersTableMismatch(iterable $columns)
     {
-        foreach (Schema::getColumns('users') as $column) {
-            if (is_array($column) && ($column['name'] ?? null) === 'id') {
-                return static::keyColumnIsIntegerBased($column);
+        $found = [];
+
+        foreach ($columns as $column) {
+            if (is_array($column) && is_string($column['name'] ?? null)) {
+                $found[$column['name']] = $column;
             }
         }
 
-        return false;
+        if (! isset($found['id'])) {
+            return 'it has no id column';
+        }
+
+        if (! static::keyColumnHoldsUuid($found['id'])) {
+            return 'its id column does not hold a UUID';
+        }
+
+        $missing = [];
+
+        foreach (['current_team_id', 'profile_photo_path'] as $required) {
+            if (! isset($found[$required])) {
+                $missing[] = $required;
+            }
+        }
+
+        return $missing === [] ? null : 'it is missing '.implode(' and ', $missing);
     }
 
     /**
-     * Determine if the given key column description is an integer key.
+     * Determine if the given key column holds a UUID, as this package writes it.
      *
-     * The check is on the key itself rather than on any column Jetstream adds
-     * alongside it. Upstream Laravel Jetstream creates profile_photo_path and
-     * current_team_id too, over an auto-incrementing key, so the presence of
-     * those columns says nothing about whether this fork's schema is in place.
+     * Each supported database renders "$table->uuid('id')" differently:
+     * PostgreSQL has a uuid type, MySQL stores it as char(36), and sqlite
+     * records a bare varchar. Sqlite is the loose one — it keeps no width, so
+     * a UUID and a ULID look identical there — which is why the required
+     * columns are checked as well rather than resting on the key alone.
      *
      * @param  array<array-key, mixed>  $column
      * @return bool
      */
-    public static function keyColumnIsIntegerBased(array $column)
+    public static function keyColumnHoldsUuid(array $column)
     {
         if (($column['auto_increment'] ?? false) === true) {
-            return true;
-        }
-
-        $type = $column['type_name'] ?? $column['type'] ?? '';
-
-        if (! is_string($type)) {
             return false;
         }
 
-        // Drop any display width, precision or modifier: "bigint(20) unsigned".
-        $type = (string) preg_replace('/[\s(].*$/', '', strtolower(trim($type)));
+        $name = $column['type_name'] ?? '';
+        $type = $column['type'] ?? '';
 
-        return in_array($type, [
-            'int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'mediumint',
-            'smallint', 'tinyint', 'serial', 'bigserial', 'serial2', 'serial4', 'serial8',
-        ], true);
+        if (! is_string($name) || ! is_string($type)) {
+            return false;
+        }
+
+        $name = (string) preg_replace('/[\s(].*$/', '', strtolower(trim($name)));
+        $length = static::declaredLength($type) ?? static::declaredLength($name);
+
+        return match ($name) {
+            'uuid' => true,
+            // A shorter fixed width is a different identifier: a ULID is 26.
+            'char' => $length === null || $length === 36,
+            'varchar', 'character varying', 'text' => $length === null || $length >= 36,
+            default => false,
+        };
+    }
+
+    /**
+     * Read the declared width out of a column type such as "char(36)".
+     *
+     * @return int|null
+     */
+    protected static function declaredLength(string $type)
+    {
+        return preg_match('/\((\d+)\)/', $type, $matches) === 1 ? (int) $matches[1] : null;
     }
 
     /**
