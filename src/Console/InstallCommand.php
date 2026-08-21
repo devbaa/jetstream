@@ -358,8 +358,6 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/livewire/UpdateTeamMemberRoleTest.php', base_path('tests/Feature/UpdateTeamMemberRoleTest.php'));
         copy($stubs.'/livewire/UpdateTeamNameTest.php', base_path('tests/Feature/UpdateTeamNameTest.php'));
 
-        // Publish Team Migrations...
-
         // Configuration...
         $this->replaceInFile('// Features::teams([\'invitations\' => true])', 'Features::teams([\'invitations\' => true])', config_path('jetstream.php'));
 
@@ -428,12 +426,6 @@ class InstallCommand extends Command implements PromptsForMissingInput
      */
     protected function ensureApplicationIsSaasCompatible()
     {
-        // Publish Tenant Migrations...
-
-        // Publish Compliance Migrations (audit logs, data requests, soft deletes, recovery)...
-
-        // Publish Domain Admin Migrations (domain claims, domain activity)...
-
         // Configuration...
         $this->replaceInFile('// Features::tenants([\'portal\' => true, \'customer-registration\' => true])', 'Features::tenants([\'portal\' => true, \'customer-registration\' => true])', config_path('jetstream.php'));
 
