@@ -89,6 +89,13 @@ jobs:
             exit 1
           fi
 
+      # "composer create-project" migrates the application it creates, which
+      # would leave Laravel's own users table in place — the installer refuses
+      # to migrate onto that, by design. Start from an unmigrated database so
+      # this job exercises a genuinely fresh install.
+      - name: Reset the application database
+        run: php artisan db:wipe --force
+
       - name: Install Jetstream
         run: php artisan jetstream:install livewire --api --verification ${{ matrix.test_style == 'pest' && '--pest' || '' }}
 
