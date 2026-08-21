@@ -92,6 +92,12 @@ jobs:
       - name: Install Jetstream
         run: php artisan jetstream:install livewire --api --verification ${{ matrix.test_style == 'pest' && '--pest' || '' }}
 
+      # The generated tests build their schema from scratch in memory, so they
+      # never touch the database the installer actually migrated. Seeding it is
+      # what catches a migration that was published but silently skipped.
+      - name: Migrate and seed the generated application
+        run: php artisan migrate --seed --force
+
       - name: Install NPM dependencies
         run: npm i
 

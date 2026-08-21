@@ -9,6 +9,8 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -18,6 +20,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
@@ -651,13 +654,84 @@ EOF;
      */
     protected function runDatabaseMigrations()
     {
-        if (confirm('New database migrations were added. Would you like to run your migrations?', true)) {
-            (new Process([$this->phpBinary(), 'artisan', 'migrate', '--force'], base_path()))
-                ->setTimeout(null)
-                ->run(function ($type, $output) {
-                    $this->output->write($output);
-                });
+        if (! $this->ensureUsersTableCanBeMigrated()) {
+            return;
         }
+
+        if (confirm('New database migrations were added. Would you like to run your migrations?', true)) {
+            $this->runArtisan(['migrate', '--force']);
+        }
+    }
+
+    /**
+     * Make sure Jetstream's replacement users table migration will actually run.
+     *
+     * Jetstream replaces Laravel's own users table migration, publishing over
+     * it under the same file name so that the table is created with a UUID
+     * primary key and Jetstream's columns. Laravel records a migration by that
+     * name, though, so if the application had already migrated — which
+     * "laravel new" and "composer create-project" both offer to do — the
+     * replacement is silently skipped and the application is left with the
+     * stock users table: an auto-incrementing key, and none of the columns
+     * Jetstream needs. Nothing fails until something reads those columns,
+     * which is usually the seeder, a long way from the cause.
+     *
+     * @return bool  whether the caller should go on to run migrations
+     */
+    protected function ensureUsersTableCanBeMigrated()
+    {
+        try {
+            if (! Schema::hasTable('users') || Schema::hasColumn('users', 'profile_photo_path')) {
+                return true;
+            }
+
+            $existing = DB::table('users')->count();
+        } catch (Throwable) {
+            // The database cannot be inspected — it may not exist yet. Leave
+            // the decision to "artisan migrate" as before.
+            return true;
+        }
+
+        $this->components->warn(
+            'Your users table was migrated before Jetstream was installed, so it is missing Jetstream\'s columns '
+            .'and its UUID primary key. Laravel will not re-run a migration it has already recorded, so the '
+            .'database has to be rebuilt from the published migrations.'
+        );
+
+        if ($existing > 0) {
+            $this->components->error(sprintf(
+                'The users table holds %d row(s), so it has been left alone. Back up or discard that data, then run '
+                .'"php artisan migrate:fresh --seed" to rebuild the database.',
+                $existing
+            ));
+
+            return false;
+        }
+
+        if (! confirm('The users table is empty. Rebuild the database now? This drops every table.', true)) {
+            $this->components->warn('Skipped. Run "php artisan migrate:fresh --seed" before using the application.');
+
+            return false;
+        }
+
+        $this->runArtisan(['migrate:fresh', '--force']);
+
+        return false;
+    }
+
+    /**
+     * Run an artisan command in the application and stream its output.
+     *
+     * @param  list<string>  $command
+     * @return void
+     */
+    protected function runArtisan(array $command)
+    {
+        (new Process([$this->phpBinary(), 'artisan', ...$command], base_path()))
+            ->setTimeout(null)
+            ->run(function ($type, $output) {
+                $this->output->write($output);
+            });
     }
 
     /**
