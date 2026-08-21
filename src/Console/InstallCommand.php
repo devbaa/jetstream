@@ -153,21 +153,42 @@ class InstallCommand extends Command implements PromptsForMissingInput
      */
     protected function publishMigrations()
     {
-        // Fortify's migration tag already publishes the passkeys table
-        // migration. Publishing the "passkeys-migrations" tag as well would
-        // write a second copy under a fresh timestamp, and the duplicate
-        // fails the very next "php artisan migrate". Its tag also re-stamps
-        // every file it publishes, so it must be published exactly once.
+        // Jetstream's own tags publish to fixed file names, so re-publishing
+        // simply overwrites them.
         foreach ([
             'jetstream-migrations',
             'jetstream-team-migrations',
             'jetstream-tenant-migrations',
             'jetstream-compliance-migrations',
             'jetstream-domain-migrations',
-            'fortify-migrations',
         ] as $tag) {
             $this->callSilent('vendor:publish', ['--tag' => $tag, '--force' => true]);
         }
+
+        // Fortify's tag stamps every file it publishes with the current
+        // date-time, so publishing it a second time writes a second copy of
+        // each migration under a new name rather than overwriting the first,
+        // and the duplicate fails the very next "php artisan migrate". This
+        // command can legitimately be run more than once — after rebuilding a
+        // database it refused, for instance — so publish it only when it has
+        // not been published already. Its tag also covers the passkeys table,
+        // which is why "passkeys-migrations" is never published separately.
+        if (! $this->hasPublishedMigration('add_two_factor_columns_to_users_table')) {
+            $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
+        }
+    }
+
+    /**
+     * Determine if a migration with the given name has already been published.
+     *
+     * @param  string  $name
+     * @return bool
+     */
+    protected function hasPublishedMigration($name)
+    {
+        $matches = glob(database_path('migrations/*_'.$name.'.php'));
+
+        return is_array($matches) && $matches !== [];
     }
 
     /**
