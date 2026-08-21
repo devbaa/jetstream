@@ -73,12 +73,18 @@ php artisan migrate --seed
 ```
 
 > **If your application had already migrated before installing** — `laravel new`
-> and `composer create-project` both offer to do that — the installer says so and
-> offers to rebuild the database. Jetstream replaces Laravel's own users table
-> migration with a UUID-keyed one under the same file name, and Laravel never
-> re-runs a migration it has already recorded, so the replacement would otherwise
-> be skipped and leave you with the stock table. To recover an application that
-> is already in that state, run `php artisan migrate:fresh --seed`.
+> and `composer create-project` both offer to do that — the installer stops before
+> migrating and tells you. Jetstream replaces Laravel's own users table migration
+> with a UUID-keyed one under the same file name, and Laravel never re-runs a
+> migration it has already recorded, so the replacement would be skipped and leave
+> you with an auto-incrementing key while everything referencing users expects a
+> UUID. The installer never rebuilds the database for you — an empty users table
+> is not an empty database. Once you have backed up or discarded whatever this
+> database holds, rebuild it yourself:
+>
+> ```bash
+> php artisan migrate:fresh --seed   # drops every table
+> ```
 
 Flag your own user as the system administrator by setting `JETSTREAM_ADMIN_EMAIL` in `.env`, then (after registering that user) run:
 

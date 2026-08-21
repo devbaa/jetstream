@@ -9,7 +9,6 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -47,6 +46,13 @@ class InstallCommand extends Command implements PromptsForMissingInput
      * @var string
      */
     protected $description = 'Install the Jetstream components and resources';
+
+    /**
+     * Indicates that migrations were skipped because the schema is incompatible.
+     *
+     * @var bool
+     */
+    protected $migrationsWereBlocked = false;
 
     /**
      * Execute the console command.
@@ -131,7 +137,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/PasswordResetTest.php', base_path('tests/Feature/PasswordResetTest.php'));
         copy($stubs.'/RegistrationTest.php', base_path('tests/Feature/RegistrationTest.php'));
 
-        return 0;
+        return $this->migrationsWereBlocked ? 1 : 0;
     }
 
     /**
@@ -659,7 +665,11 @@ EOF;
         }
 
         if (confirm('New database migrations were added. Would you like to run your migrations?', true)) {
-            $this->runArtisan(['migrate', '--force']);
+            (new Process([$this->phpBinary(), 'artisan', 'migrate', '--force'], base_path()))
+                ->setTimeout(null)
+                ->run(function ($type, $output) {
+                    $this->output->write($output);
+                });
         }
     }
 
@@ -668,70 +678,95 @@ EOF;
      *
      * Jetstream replaces Laravel's own users table migration, publishing over
      * it under the same file name so that the table is created with a UUID
-     * primary key and Jetstream's columns. Laravel records a migration by that
-     * name, though, so if the application had already migrated — which
-     * "laravel new" and "composer create-project" both offer to do — the
-     * replacement is silently skipped and the application is left with the
-     * stock users table: an auto-incrementing key, and none of the columns
-     * Jetstream needs. Nothing fails until something reads those columns,
-     * which is usually the seeder, a long way from the cause.
+     * primary key. Laravel records a migration by that name, though, so if the
+     * application had already migrated — which "laravel new" and
+     * "composer create-project" both offer to do — the replacement is silently
+     * skipped and the auto-incrementing key survives, while every table that
+     * references users is built expecting a UUID. Nothing fails until
+     * something reads a column that was never added, usually the seeder.
+     *
+     * The database is never repaired here. Rebuilding it drops every table,
+     * and an application can hold data this command knows nothing about, so
+     * the operator is told what to run and installation stops short of
+     * migrating. The migrations have already been published by this point,
+     * which is what "migrate:fresh" needs in order to build the right schema.
      *
      * @return bool  whether the caller should go on to run migrations
      */
     protected function ensureUsersTableCanBeMigrated()
     {
         try {
-            if (! Schema::hasTable('users') || Schema::hasColumn('users', 'profile_photo_path')) {
+            if (! Schema::hasTable('users') || ! $this->usersTableKeyIsIncompatible()) {
                 return true;
             }
-
-            $existing = DB::table('users')->count();
         } catch (Throwable) {
             // The database cannot be inspected — it may not exist yet. Leave
             // the decision to "artisan migrate" as before.
             return true;
         }
 
-        $this->components->warn(
-            'Your users table was migrated before Jetstream was installed, so it is missing Jetstream\'s columns '
-            .'and its UUID primary key. Laravel will not re-run a migration it has already recorded, so the '
-            .'database has to be rebuilt from the published migrations.'
+        $this->migrationsWereBlocked = true;
+
+        $this->components->error(
+            'Your users table has an auto-incrementing key, so it was not created by Jetstream, which needs a UUID '
+            .'key. Laravel never re-runs a migration it has already recorded, so the users table migration Jetstream '
+            .'just published would be skipped and the mismatch would survive.'
         );
 
-        if ($existing > 0) {
-            $this->components->error(sprintf(
-                'The users table holds %d row(s), so it has been left alone. Back up or discard that data, then run '
-                .'"php artisan migrate:fresh --seed" to rebuild the database.',
-                $existing
-            ));
-
-            return false;
-        }
-
-        if (! confirm('The users table is empty. Rebuild the database now? This drops every table.', true)) {
-            $this->components->warn('Skipped. Run "php artisan migrate:fresh --seed" before using the application.');
-
-            return false;
-        }
-
-        $this->runArtisan(['migrate:fresh', '--force']);
+        $this->components->warn(
+            'Nothing has been migrated. Once you have backed up or discarded the data in this database, rebuild it '
+            .'from the published migrations with "php artisan migrate:fresh --seed". That drops every table.'
+        );
 
         return false;
     }
 
     /**
-     * Run an artisan command in the application and stream its output.
+     * Determine if the users table is keyed by an integer rather than a UUID.
      *
-     * @param  list<string>  $command
-     * @return void
+     * @return bool
      */
-    protected function runArtisan(array $command)
+    protected function usersTableKeyIsIncompatible()
     {
-        (new Process([$this->phpBinary(), 'artisan', ...$command], base_path()))
-            ->setTimeout(null)
-            ->run(function ($type, $output) {
-                $this->output->write($output);
-            });
+        foreach (Schema::getColumns('users') as $column) {
+            if (is_array($column) && ($column['name'] ?? null) === 'id') {
+                return static::keyColumnIsIntegerBased($column);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine if the given key column description is an integer key.
+     *
+     * The check is on the key itself rather than on any column Jetstream adds
+     * alongside it. Upstream Laravel Jetstream creates profile_photo_path and
+     * current_team_id too, over an auto-incrementing key, so the presence of
+     * those columns says nothing about whether this fork's schema is in place.
+     *
+     * @param  array<array-key, mixed>  $column
+     * @return bool
+     */
+    public static function keyColumnIsIntegerBased(array $column)
+    {
+        if (($column['auto_increment'] ?? false) === true) {
+            return true;
+        }
+
+        $type = $column['type_name'] ?? $column['type'] ?? '';
+
+        if (! is_string($type)) {
+            return false;
+        }
+
+        // Drop any display width, precision or modifier: "bigint(20) unsigned".
+        $type = (string) preg_replace('/[\s(].*$/', '', strtolower(trim($type)));
+
+        return in_array($type, [
+            'int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'mediumint',
+            'smallint', 'tinyint', 'serial', 'bigserial', 'serial2', 'serial4', 'serial8',
+        ], true);
     }
 
     /**
