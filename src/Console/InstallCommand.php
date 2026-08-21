@@ -295,7 +295,11 @@ class InstallCommand extends Command implements PromptsForMissingInput
         $this->line('');
         $this->runDatabaseMigrations();
 
-        $this->components->info('Livewire scaffolding installed successfully.');
+        if ($this->migrationsWereBlocked) {
+            $this->components->warn('Livewire scaffolding was installed, but the database was not migrated. See above.');
+        } else {
+            $this->components->info('Livewire scaffolding installed successfully.');
+        }
 
         return true;
     }
