@@ -776,8 +776,8 @@ EOF;
             $this->components->error(sprintf('The database migrations failed with exit status %d.', $status));
 
             $this->components->warn(
-                'The output above is "artisan migrate --force" reporting why. The database is in whatever state that '
-                .'migration left it in; nothing here has changed it.'
+                'The output above is "artisan migrate --force" reporting why. The database may now be partially '
+                .'migrated. Jetstream has not attempted repair, rollback, or retry.'
             );
         }
     }
