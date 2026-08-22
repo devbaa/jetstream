@@ -48,6 +48,20 @@ class InstallCommand extends Command implements PromptsForMissingInput
     protected $description = 'Install the Jetstream components and resources';
 
     /**
+     * The Laravel migration this package publishes its own version over.
+     *
+     * @var string
+     */
+    public const USERS_MIGRATION = '0001_01_01_000000_create_users_table';
+
+    /**
+     * The tables that migration creates, in the order it creates them.
+     *
+     * @var list<string>
+     */
+    public const USERS_MIGRATION_TABLES = ['users', 'password_reset_tokens', 'sessions'];
+
+    /**
      * Indicates that migrations were skipped because the schema is incompatible.
      *
      * @var bool
@@ -67,7 +81,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
             return 1;
         }
 
-        // Migrations first, and then the compatibility check, before anything
+        // Migrations first, and then the consistency check, before anything
         // in the application has been touched. The check tells the operator to
         // rebuild with "migrate:fresh", which needs every migration on disk to
         // build the right schema — but nothing else here needs to have run, and
@@ -75,7 +89,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
         // installed.
         $this->publishMigrations();
 
-        if (! $this->ensureUsersTableCanBeMigrated()) {
+        if (! $this->ensureUsersMigrationIsConsistent()) {
             return 1;
         }
 
@@ -739,7 +753,7 @@ EOF;
      */
     protected function runDatabaseMigrations()
     {
-        if (! $this->ensureUsersTableCanBeMigrated()) {
+        if (! $this->ensureUsersMigrationIsConsistent()) {
             return;
         }
 
@@ -753,15 +767,25 @@ EOF;
     }
 
     /**
-     * Make sure Jetstream's replacement users table migration will actually run.
+     * Make sure Jetstream's replacement users migration leaves a usable schema.
      *
-     * Jetstream replaces Laravel's own users table migration, publishing over
-     * it under the same file name. Laravel records a migration by that name,
-     * though, so if the application had already migrated — which "laravel new"
-     * and "composer create-project" both offer to do — the replacement is
-     * silently skipped, and the table keeps whatever shape it already had
-     * while everything referencing it is built for Jetstream's. Nothing fails
-     * until something reads a column that was never added, usually the seeder.
+     * Jetstream publishes its own users migration over Laravel's, under the
+     * same file name, and that one migration creates three tables: users,
+     * password_reset_tokens and sessions. Laravel tracks migrations by name,
+     * so whether the published file will run at all depends on the ledger, not
+     * on the schema — and the two can disagree in both directions:
+     *
+     * The name is already recorded — "laravel new" and "composer
+     * create-project" both offer to migrate — so the replacement never runs.
+     * Whatever Laravel's own migration created stays: an auto-incrementing
+     * users.id, an integer sessions.user_id, no current_team_id. Nothing fails
+     * until something reads a column that was never added, usually the seeder,
+     * and sessions is worse than that because the installer sets
+     * SESSION_DRIVER=database, so every request writes to a table whose
+     * user_id cannot hold the key it is given.
+     *
+     * Or the name is not recorded and the tables exist anyway, in which case
+     * the migration does run and "Schema::create" fails on the first one.
      *
      * The database is never repaired here. Rebuilding it drops every table,
      * and an application can hold data this command knows nothing about, so
@@ -769,15 +793,19 @@ EOF;
      *
      * @return bool  whether installation should continue
      */
-    protected function ensureUsersTableCanBeMigrated()
+    protected function ensureUsersMigrationIsConsistent()
     {
         try {
-            if (! Schema::hasTable('users')) {
-                return true;
+            $recorded = $this->usersMigrationWasRecorded();
+
+            $tables = [];
+
+            foreach (static::USERS_MIGRATION_TABLES as $table) {
+                $tables[$table] = Schema::hasTable($table) ? Schema::getColumns($table) : null;
             }
 
-            $mismatch = static::usersTableMismatch(
-                Schema::getColumns('users'), Schema::getConnection()->getDriverName()
+            $mismatch = static::usersMigrationMismatch(
+                $recorded, $tables, Schema::getConnection()->getDriverName()
             );
         } catch (Throwable) {
             // The database cannot be inspected — it may not exist yet. Leave
@@ -792,11 +820,20 @@ EOF;
         $this->migrationsWereBlocked = true;
 
         $this->components->error(sprintf(
-            'Your users table was not created by Jetstream: %s. Laravel never re-runs a migration it has already '
-            .'recorded, so the users table migration Jetstream publishes would be skipped and the mismatch would '
-            .'survive.',
-            $mismatch
+            'This database is not one Jetstream can install onto: %s.', $mismatch
         ));
+
+        $this->components->warn($recorded
+            ? sprintf(
+                'Laravel has already recorded the [%s] migration, so the one Jetstream publishes in its place will '
+                .'never run and the mismatch would survive.',
+                static::USERS_MIGRATION
+            )
+            : sprintf(
+                'Laravel has no record of the [%s] migration, so it will run and fail on a table that already exists.',
+                static::USERS_MIGRATION
+            )
+        );
 
         $this->components->warn(
             'Nothing has been installed or migrated. The migrations have been published, so once you have backed up '
@@ -808,20 +845,91 @@ EOF;
     }
 
     /**
-     * Describe how the users table differs from the one Jetstream creates.
+     * Determine whether Laravel has already recorded the users migration.
      *
-     * The check is positive: it recognises the shape this package's migration
-     * produces rather than ruling out shapes it does not. Both halves matter.
-     * Upstream Laravel Jetstream creates profile_photo_path and
-     * current_team_id over an auto-incrementing key, so those columns alone
-     * prove nothing; and a table can carry a UUID key while still missing the
-     * columns, which is the same skipped migration by another route.
+     * @return bool
+     */
+    protected function usersMigrationWasRecorded()
+    {
+        // The repository, rather than the migrations table directly: the
+        // ledger's name is configurable and an application may bind its own.
+        $repository = $this->laravel->make('migration.repository');
+
+        return $repository->repositoryExists()
+            && in_array(static::USERS_MIGRATION, $repository->getRan(), true);
+    }
+
+    /**
+     * Describe why the replacement users migration cannot be applied cleanly.
+     *
+     * Which question to ask depends on whether the migration will run. If it
+     * will, the only thing that matters is that its tables are not there yet.
+     * If it will not, the schema on disk is final, so it has to already be the
+     * schema the migration would have produced — checked positively, against
+     * the shape this package writes, rather than by ruling out shapes it does
+     * not. Upstream Laravel Jetstream adds current_team_id and
+     * profile_photo_path over an auto-incrementing key, so the columns alone
+     * prove nothing, and a UUID users.id proves nothing about sessions.
+     *
+     * @param  bool  $recorded  whether Laravel has recorded the migration
+     * @param  array<string, iterable<mixed>|null>  $tables  columns per table, null when the table is absent
+     * @param  string  $driver
+     * @return string|null  the mismatch, or null when the migration applies cleanly
+     */
+    public static function usersMigrationMismatch($recorded, array $tables, $driver)
+    {
+        if (! $recorded) {
+            $existing = array_values(array_filter(
+                static::USERS_MIGRATION_TABLES,
+                fn (string $table) => ($tables[$table] ?? null) !== null
+            ));
+
+            if ($existing === []) {
+                return null;
+            }
+
+            return count($existing) === 1
+                ? $existing[0].' already exists without the migration that creates it'
+                : static::listNames($existing).' already exist without the migration that creates them';
+        }
+
+        foreach (static::USERS_MIGRATION_TABLES as $table) {
+            if (($tables[$table] ?? null) === null) {
+                return $table.' is missing';
+            }
+        }
+
+        $columns = [];
+
+        foreach (static::USERS_MIGRATION_TABLES as $table) {
+            $columns[$table] = static::columnsByName($tables[$table] ?? []);
+        }
+
+        foreach ([
+            ['users', 'id', true],
+            ['users', 'current_team_id', true],
+            ['users', 'profile_photo_path', false],
+            ['sessions', 'user_id', true],
+        ] as [$table, $column, $mustHoldUuid]) {
+            if (! isset($columns[$table][$column])) {
+                return $table.'.'.$column.' is missing';
+            }
+
+            if ($mustHoldUuid && ! static::keyColumnHoldsUuid($columns[$table][$column], $driver)) {
+                return $table.'.'.$column.' does not hold a UUID';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Key a driver's column descriptions by column name.
      *
      * @param  iterable<mixed>  $columns
-     * @param  string  $driver
-     * @return string|null  the mismatch, or null when the table matches
+     * @return array<string, array<array-key, mixed>>
      */
-    public static function usersTableMismatch(iterable $columns, $driver)
+    protected static function columnsByName(iterable $columns)
     {
         $found = [];
 
@@ -831,37 +939,38 @@ EOF;
             }
         }
 
-        if (! isset($found['id'])) {
-            return 'it has no id column';
-        }
-
-        if (! static::keyColumnHoldsUuid($found['id'], $driver)) {
-            return 'its id column does not hold a UUID';
-        }
-
-        $missing = [];
-
-        foreach (['current_team_id', 'profile_photo_path'] as $required) {
-            if (! isset($found[$required])) {
-                $missing[] = $required;
-            }
-        }
-
-        return $missing === [] ? null : 'it is missing '.implode(' and ', $missing);
+        return $found;
     }
 
     /**
-     * Determine if the given key column holds a UUID, as this package writes it.
+     * Join the given names into a readable list.
      *
-     * Each database renders "$table->uuid('id')" as its own type, so each is
+     * @param  list<string>  $names
+     * @return string
+     */
+    protected static function listNames(array $names)
+    {
+        if (count($names) < 2) {
+            return $names[0] ?? '';
+        }
+
+        $last = array_pop($names);
+
+        return implode(', ', $names).' and '.$last;
+    }
+
+    /**
+     * Determine if the given column holds a UUID, as this package writes it.
+     *
+     * Each database renders "$table->uuid(...)" as its own type, so each is
      * checked against the one it actually produces rather than against the
      * union of all of them — a varchar key is this package's schema on sqlite
      * and is not on PostgreSQL, where a uuid column was what would have been
      * created.
      *
      * Sqlite is the loose one: it records no width, so a UUID and a ULID are
-     * indistinguishable there. That is why the columns Jetstream adds are
-     * checked as well rather than resting on the key alone.
+     * indistinguishable there. That is why every column the migration is
+     * checked on has to line up rather than resting on the key alone.
      *
      * A driver this package does not know cannot be held to a shape, so there
      * the check falls back to ruling out the auto-incrementing key that

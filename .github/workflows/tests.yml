@@ -90,15 +90,30 @@ jobs:
           fi
 
       # "composer create-project" migrates the application it creates, so at
-      # this point it carries Laravel's own users table — the exact condition
-      # that silently produced a broken schema. Pin the refusal here, on the
-      # real generated application, before wiping for the clean install below.
+      # this point Laravel has recorded the users migration and built its own
+      # version of the three tables that migration creates — the exact
+      # condition that silently produced a broken schema. Pin the refusal here,
+      # on the real generated application, before wiping for the clean install
+      # below.
       - name: Refuse to install onto a pre-migrated application
         run: |
-          php -r 'file_put_contents("/tmp/users-before.json", json_encode(
+          php -r 'file_put_contents("/tmp/schema-before.json", json_encode(
             (new PDO("sqlite:database/database.sqlite"))
-              ->query("pragma table_info(users)")->fetchAll(PDO::FETCH_ASSOC)
+              ->query("select name, sql from sqlite_master order by name")
+              ->fetchAll(PDO::FETCH_ASSOC)
           ));'
+
+          # The state under test: the migration recorded, its tables in
+          # Laravel's shape rather than Jetstream's.
+          php -r '
+            $ran = (new PDO("sqlite:database/database.sqlite"))
+              ->query("select migration from migrations")->fetchAll(PDO::FETCH_COLUMN);
+
+            if (! in_array("0001_01_01_000000_create_users_table", $ran, true)) {
+              fwrite(STDERR, "The generated application was not migrated; there is nothing to refuse.\n");
+              exit(1);
+            }
+          '
 
           set +e
           php artisan jetstream:install livewire --api --verification > /tmp/install.log 2>&1
@@ -108,28 +123,54 @@ jobs:
           cat /tmp/install.log
 
           if [ "$status" -eq 0 ]; then
-            echo 'The installer accepted a users table it did not create.'
+            echo 'The installer accepted a database its migration cannot fix.'
             exit 1
           fi
 
           # Any crash also exits non-zero, so the refusal itself has to be the
           # reason: assert the message, not just the status.
-          grep -q 'was not created by Jetstream' /tmp/install.log || {
-            echo 'The installer failed for some reason other than the schema check.'
+          grep -q 'not one Jetstream can install onto' /tmp/install.log || {
+            echo 'The installer failed for some reason other than the consistency check.'
             exit 1
           }
 
           php -r '
             $after = json_encode(
               (new PDO("sqlite:database/database.sqlite"))
-                ->query("pragma table_info(users)")->fetchAll(PDO::FETCH_ASSOC)
+                ->query("select name, sql from sqlite_master order by name")
+                ->fetchAll(PDO::FETCH_ASSOC)
             );
 
-            if ($after !== file_get_contents("/tmp/users-before.json")) {
-              fwrite(STDERR, "The refused install changed the users table.\n");
+            if ($after !== file_get_contents("/tmp/schema-before.json")) {
+              fwrite(STDERR, "The refused install changed the database schema.\n");
               exit(1);
             }
           '
+
+      # The other half of the contract: nothing recorded, but the tables the
+      # migration creates are already there, so it would run and fail on the
+      # first "Schema::create". Deleting the ledger rows and leaving the schema
+      # alone is exactly that state.
+      - name: Refuse to install when the migration would run onto existing tables
+        run: |
+          php -r '(new PDO("sqlite:database/database.sqlite"))->exec("delete from migrations");'
+
+          set +e
+          php artisan jetstream:install livewire --api --verification > /tmp/install-unrecorded.log 2>&1
+          status=$?
+          set -e
+
+          cat /tmp/install-unrecorded.log
+
+          if [ "$status" -eq 0 ]; then
+            echo 'The installer accepted tables its migration is about to try to create.'
+            exit 1
+          fi
+
+          grep -q 'without the migration that creates' /tmp/install-unrecorded.log || {
+            echo 'The installer failed for some reason other than the consistency check.'
+            exit 1
+          }
 
       - name: Reset the application database
         run: php artisan db:wipe --force
