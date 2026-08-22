@@ -59,13 +59,23 @@ class InstallCommandMigrationLedgerTest extends OrchestraTestCase
 
     public function test_an_empty_database_is_accepted(): void
     {
-        // Nothing recorded and nothing created: the migration will run and
-        // build all three tables itself.
+        // Nothing recorded and nothing created — no ledger table at all, which
+        // is the state "artisan migrate" builds one from. The migration will
+        // run and create all three tables itself.
+        $connection = Schema::getConnection();
+
+        Schema::disableForeignKeyConstraints();
+
         foreach (InstallCommand::USERS_MIGRATION_TABLES as $table) {
-            Schema::dropIfExists($table);
+            // Half the schema has a foreign key onto users, and PostgreSQL
+            // refuses to drop a table those still point at.
+            $connection->getDriverName() === 'pgsql'
+                ? $connection->statement('drop table if exists "'.$table.'" cascade')
+                : Schema::dropIfExists($table);
         }
 
         Schema::dropIfExists('migrations');
+        Schema::enableForeignKeyConstraints();
 
         $this->assertSame(0, $this->guard());
     }
