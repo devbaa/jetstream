@@ -318,11 +318,12 @@ Two independent moderation levers:
 | --- | --- | --- |
 | Scope | The whole application, every organization. | One organization, membership, or customer account. |
 | Who | System administrators (`/admin/users`). | Admins (tenant), tenant staff (membership / customer account). |
-| Effect | User is signed out everywhere and cannot sign in. | Target loses access & permissions where frozen. |
+| Effect | Existing credentials are revoked and the user is turned away. | Target loses access & permissions where frozen. |
 | Reversible | Yes (unblock). | Yes (unfreeze) — nothing is lost. |
 | Storage | `users.blocked_at` / `blocked_reason`. | `tenants.frozen_at`, `tenant_user.frozen_at`, `customer_accounts.frozen_at`. |
 
-- **Blocking** is enforced by the `account.active` middleware on every authenticated request; it logs the user out and redirects with a clear message. `/admin/users` also lets admins reset lost 2FA and clear lost passkeys.
+- **Blocking** happens in two parts. At block time the `BlockUser` action revokes what the user already holds, in one transaction with the block itself: every Sanctum personal access token is deleted, and so is every database session row belonging to them. Deletion rather than a flag is what makes unblocking safe — there is nothing left that could become valid again, so lifting a block never resurrects an old credential. Then the `account.active` middleware turns a blocked user away from Jetstream's own route group (and from Livewire component updates, where it is registered as persistent middleware), logging them out and redirecting with a clear message. The first part is what covers an application's own `auth:sanctum` API routes, which never pass through the middleware at all. `/admin/users` also lets admins reset lost 2FA and clear lost passkeys.
+- Blocking does **not** currently reject the login attempt itself: a blocked user can still authenticate, and is then turned away by the middleware on the first Jetstream route they reach. Routes of your own that carry only `auth` should add the `account.active` middleware.
 - **Freezing** has three granularities: a whole **tenant** (system admin — all staff and customers lose access; `TenantFrozen`/`TenantUnfrozen` events), a **staff membership** (tenant staff with `staff:manage` — the member keeps their seat but loses all access; owners cannot be frozen), and a **customer account** (tenant staff — its members are locked out of the portal). Context middleware self-heals frozen selections, and `switchTenant`/`switchCustomerAccount` refuse frozen targets.
 
 ---
