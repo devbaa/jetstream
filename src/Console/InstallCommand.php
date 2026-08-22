@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -18,6 +19,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
@@ -46,6 +48,27 @@ class InstallCommand extends Command implements PromptsForMissingInput
     protected $description = 'Install the Jetstream components and resources';
 
     /**
+     * The Laravel migration this package publishes its own version over.
+     *
+     * @var string
+     */
+    public const USERS_MIGRATION = '0001_01_01_000000_create_users_table';
+
+    /**
+     * The tables that migration creates, in the order it creates them.
+     *
+     * @var list<string>
+     */
+    public const USERS_MIGRATION_TABLES = ['users', 'password_reset_tokens', 'sessions'];
+
+    /**
+     * Indicates that migrations were skipped because the schema is incompatible.
+     *
+     * @var bool
+     */
+    protected $migrationsWereBlocked = false;
+
+    /**
      * Execute the console command.
      *
      * @return int|null
@@ -58,17 +81,23 @@ class InstallCommand extends Command implements PromptsForMissingInput
             return 1;
         }
 
+        // Migrations first, and then the consistency check, before anything
+        // in the application has been touched. The check tells the operator to
+        // rebuild with "migrate:fresh", which needs every migration on disk to
+        // build the right schema — but nothing else here needs to have run, and
+        // refusing after the application had been rewritten would leave it half
+        // installed.
+        $this->publishMigrations();
+
+        if (! $this->ensureUsersMigrationIsConsistent()) {
+            return 1;
+        }
+
         // Publish...
         $this->callSilent('vendor:publish', ['--tag' => 'jetstream-config', '--force' => true]);
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-migrations', '--force' => true]);
 
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-config', '--force' => true]);
         $this->callSilent('vendor:publish', ['--tag' => 'fortify-support', '--force' => true]);
-        // Fortify's migration tag already publishes the passkeys table
-        // migration. Publishing the "passkeys-migrations" tag as well would
-        // write a second copy under a fresh timestamp, and the duplicate
-        // fails the very next "php artisan migrate".
-        $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
 
         // Storage...
         $this->callSilent('storage:link');
@@ -128,7 +157,88 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/PasswordResetTest.php', base_path('tests/Feature/PasswordResetTest.php'));
         copy($stubs.'/RegistrationTest.php', base_path('tests/Feature/RegistrationTest.php'));
 
-        return 0;
+        return $this->migrationsWereBlocked ? 1 : 0;
+    }
+
+    /**
+     * Publish every migration this package contributes to the application.
+     *
+     * @return void
+     */
+    protected function publishMigrations()
+    {
+        // Jetstream's own tags publish to fixed file names, so re-publishing
+        // simply overwrites them.
+        foreach ([
+            'jetstream-migrations',
+            'jetstream-team-migrations',
+            'jetstream-tenant-migrations',
+            'jetstream-compliance-migrations',
+            'jetstream-domain-migrations',
+        ] as $tag) {
+            $this->callSilent('vendor:publish', ['--tag' => $tag, '--force' => true]);
+        }
+
+        $this->publishFortifyMigrations();
+    }
+
+    /**
+     * Publish Fortify's migrations without duplicating any already present.
+     *
+     * Fortify's tag stamps every file it publishes with the current date-time
+     * rather than overwriting, so publishing it twice leaves two copies of a
+     * migration and the duplicate fails the very next "php artisan migrate".
+     * The tag covers more than one migration — its own, and the passkeys table
+     * it integrates — so no single file can stand in for the group: an
+     * application that used Fortify before passkeys were part of it has one
+     * but not the other, and either skipping or publishing wholesale gets that
+     * case wrong.
+     *
+     * So the group is published, and any file it just wrote for a migration
+     * that was already present is removed again. What is left is each
+     * migration exactly once, whichever of them existed beforehand.
+     *
+     * @return void
+     */
+    protected function publishFortifyMigrations()
+    {
+        $before = $this->publishedMigrations();
+
+        $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
+
+        foreach ($this->publishedMigrations() as $migration => $paths) {
+            if (! isset($before[$migration])) {
+                continue;
+            }
+
+            foreach (array_diff($paths, $before[$migration]) as $duplicate) {
+                (new Filesystem)->delete($duplicate);
+            }
+        }
+    }
+
+    /**
+     * Get the published migration files, grouped by name without their stamp.
+     *
+     * @return array<string, list<string>>
+     */
+    protected function publishedMigrations()
+    {
+        $migrations = [];
+
+        foreach ((array) glob(database_path('migrations/*.php')) as $path) {
+            if (! is_string($path)) {
+                continue;
+            }
+
+            $name = (string) preg_replace(
+                '/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($path, '.php')
+            );
+
+            $migrations[$name][] = $path;
+        }
+
+        return $migrations;
     }
 
     /**
@@ -286,7 +396,11 @@ class InstallCommand extends Command implements PromptsForMissingInput
         $this->line('');
         $this->runDatabaseMigrations();
 
-        $this->components->info('Livewire scaffolding installed successfully.');
+        if ($this->migrationsWereBlocked) {
+            $this->components->warn('Livewire scaffolding was installed, but the database was not migrated. See above.');
+        } else {
+            $this->components->info('Livewire scaffolding installed successfully.');
+        }
 
         return true;
     }
@@ -314,9 +428,6 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/livewire/RemoveTeamMemberTest.php', base_path('tests/Feature/RemoveTeamMemberTest.php'));
         copy($stubs.'/livewire/UpdateTeamMemberRoleTest.php', base_path('tests/Feature/UpdateTeamMemberRoleTest.php'));
         copy($stubs.'/livewire/UpdateTeamNameTest.php', base_path('tests/Feature/UpdateTeamNameTest.php'));
-
-        // Publish Team Migrations...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-team-migrations', '--force' => true]);
 
         // Configuration...
         $this->replaceInFile('// Features::teams([\'invitations\' => true])', 'Features::teams([\'invitations\' => true])', config_path('jetstream.php'));
@@ -386,15 +497,6 @@ class InstallCommand extends Command implements PromptsForMissingInput
      */
     protected function ensureApplicationIsSaasCompatible()
     {
-        // Publish Tenant Migrations...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-tenant-migrations', '--force' => true]);
-
-        // Publish Compliance Migrations (audit logs, data requests, soft deletes, recovery)...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-compliance-migrations', '--force' => true]);
-
-        // Publish Domain Admin Migrations (domain claims, domain activity)...
-        $this->callSilent('vendor:publish', ['--tag' => 'jetstream-domain-migrations', '--force' => true]);
-
         // Configuration...
         $this->replaceInFile('// Features::tenants([\'portal\' => true, \'customer-registration\' => true])', 'Features::tenants([\'portal\' => true, \'customer-registration\' => true])', config_path('jetstream.php'));
 
@@ -651,6 +753,10 @@ EOF;
      */
     protected function runDatabaseMigrations()
     {
+        if (! $this->ensureUsersMigrationIsConsistent()) {
+            return;
+        }
+
         if (confirm('New database migrations were added. Would you like to run your migrations?', true)) {
             (new Process([$this->phpBinary(), 'artisan', 'migrate', '--force'], base_path()))
                 ->setTimeout(null)
@@ -658,6 +764,288 @@ EOF;
                     $this->output->write($output);
                 });
         }
+    }
+
+    /**
+     * Make sure Jetstream's replacement users migration leaves a usable schema.
+     *
+     * Jetstream publishes its own users migration over Laravel's, under the
+     * same file name, and that one migration creates three tables: users,
+     * password_reset_tokens and sessions. Laravel tracks migrations by name,
+     * so whether the published file will run at all depends on the ledger, not
+     * on the schema — and the two can disagree in both directions:
+     *
+     * The name is already recorded — "laravel new" and "composer
+     * create-project" both offer to migrate — so the replacement never runs.
+     * Whatever Laravel's own migration created stays: an auto-incrementing
+     * users.id, an integer sessions.user_id, no current_team_id. Nothing fails
+     * until something reads a column that was never added, usually the seeder,
+     * and sessions is worse than that because the installer sets
+     * SESSION_DRIVER=database, so every request writes to a table whose
+     * user_id cannot hold the key it is given.
+     *
+     * Or the name is not recorded and the tables exist anyway, in which case
+     * the migration does run and "Schema::create" fails on the first one.
+     *
+     * A database that cannot be inspected at all is refused the same way. It
+     * is not a database that has been shown to be clean, and this command runs
+     * "artisan migrate" itself, so proceeding would mean migrating blind.
+     *
+     * The database is never repaired here. Rebuilding it drops every table,
+     * and an application can hold data this command knows nothing about, so
+     * the operator is told what to run and installation stops.
+     *
+     * @return bool  whether installation should continue
+     */
+    protected function ensureUsersMigrationIsConsistent()
+    {
+        try {
+            $recorded = $this->usersMigrationWasRecorded();
+
+            $tables = [];
+
+            foreach (static::USERS_MIGRATION_TABLES as $table) {
+                $tables[$table] = Schema::hasTable($table) ? Schema::getColumns($table) : null;
+            }
+
+            $mismatch = static::usersMigrationMismatch(
+                $recorded, $tables, Schema::getConnection()->getDriverName()
+            );
+        } catch (Throwable $e) {
+            // A database that cannot be inspected is not a database that has
+            // been cleared. Connection failures, a repository an application
+            // has replaced, permissions, unreadable table metadata — none of
+            // them say the replacement migration will apply, and the installer
+            // goes on to run "artisan migrate" itself, so carrying on means
+            // migrating blind. Uncertainty is refused like a mismatch.
+            $this->migrationsWereBlocked = true;
+
+            $this->components->error(
+                'Jetstream could not verify the database schema: '.$e->getMessage()
+            );
+
+            $this->components->warn(
+                'This command migrates the database itself, so it needs one it can read. Nothing has been installed '
+                .'or migrated. Fix the connection and run this command again.'
+            );
+
+            return false;
+        }
+
+        if ($mismatch === null) {
+            return true;
+        }
+
+        $this->migrationsWereBlocked = true;
+
+        $this->components->error(sprintf(
+            'This database is not one Jetstream can install onto: %s.', $mismatch
+        ));
+
+        $this->components->warn($recorded
+            ? sprintf(
+                'Laravel has already recorded the [%s] migration, so the one Jetstream publishes in its place will '
+                .'never run and the mismatch would survive.',
+                static::USERS_MIGRATION
+            )
+            : sprintf(
+                'Laravel has no record of the [%s] migration, so it will run and fail on a table that already exists.',
+                static::USERS_MIGRATION
+            )
+        );
+
+        $this->components->warn(
+            'Nothing has been installed or migrated. The migrations have been published, so once you have backed up '
+            .'or discarded the data in this database you can rebuild it with "php artisan migrate:fresh --seed" and '
+            .'run this command again. That drops every table.'
+        );
+
+        return false;
+    }
+
+    /**
+     * Determine whether Laravel has already recorded the users migration.
+     *
+     * @return bool
+     */
+    protected function usersMigrationWasRecorded()
+    {
+        // The repository, rather than the migrations table directly: the
+        // ledger's name is configurable and an application may bind its own.
+        $repository = $this->laravel->make('migration.repository');
+
+        return $repository->repositoryExists()
+            && in_array(static::USERS_MIGRATION, $repository->getRan(), true);
+    }
+
+    /**
+     * Describe why the replacement users migration cannot be applied cleanly.
+     *
+     * Which question to ask depends on whether the migration will run. If it
+     * will, the only thing that matters is that its tables are not there yet.
+     * If it will not, the schema on disk is final, so it has to already be the
+     * schema the migration would have produced — checked positively, against
+     * the shape this package writes, rather than by ruling out shapes it does
+     * not. Upstream Laravel Jetstream adds current_team_id and
+     * profile_photo_path over an auto-incrementing key, so the columns alone
+     * prove nothing, and a UUID users.id proves nothing about sessions.
+     *
+     * @param  bool  $recorded  whether Laravel has recorded the migration
+     * @param  array<string, iterable<mixed>|null>  $tables  columns per table, null when the table is absent
+     * @param  string  $driver
+     * @return string|null  the mismatch, or null when the migration applies cleanly
+     */
+    public static function usersMigrationMismatch($recorded, array $tables, $driver)
+    {
+        if (! $recorded) {
+            $existing = array_values(array_filter(
+                static::USERS_MIGRATION_TABLES,
+                fn (string $table) => ($tables[$table] ?? null) !== null
+            ));
+
+            if ($existing === []) {
+                return null;
+            }
+
+            return count($existing) === 1
+                ? $existing[0].' already exists without the migration that creates it'
+                : static::listNames($existing).' already exist without the migration that creates them';
+        }
+
+        foreach (static::USERS_MIGRATION_TABLES as $table) {
+            if (($tables[$table] ?? null) === null) {
+                return $table.' is missing';
+            }
+        }
+
+        $columns = [];
+
+        foreach (static::USERS_MIGRATION_TABLES as $table) {
+            $columns[$table] = static::columnsByName($tables[$table] ?? []);
+        }
+
+        foreach ([
+            ['users', 'id', true],
+            ['users', 'current_team_id', true],
+            ['users', 'profile_photo_path', false],
+            ['sessions', 'user_id', true],
+        ] as [$table, $column, $mustHoldUuid]) {
+            if (! isset($columns[$table][$column])) {
+                return $table.'.'.$column.' is missing';
+            }
+
+            if ($mustHoldUuid && ! static::keyColumnHoldsUuid($columns[$table][$column], $driver)) {
+                return $table.'.'.$column.' does not hold a UUID';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Key a driver's column descriptions by column name.
+     *
+     * @param  iterable<mixed>  $columns
+     * @return array<string, array<array-key, mixed>>
+     */
+    protected static function columnsByName(iterable $columns)
+    {
+        $found = [];
+
+        foreach ($columns as $column) {
+            if (is_array($column) && is_string($column['name'] ?? null)) {
+                $found[$column['name']] = $column;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Join the given names into a readable list.
+     *
+     * @param  list<string>  $names
+     * @return string
+     */
+    protected static function listNames(array $names)
+    {
+        if (count($names) < 2) {
+            return $names[0] ?? '';
+        }
+
+        $last = array_pop($names);
+
+        return implode(', ', $names).' and '.$last;
+    }
+
+    /**
+     * Determine if the given column holds a UUID, as this package writes it.
+     *
+     * Each database renders "$table->uuid(...)" as its own type, so each is
+     * checked against the one it actually produces rather than against the
+     * union of all of them — a varchar key is this package's schema on sqlite
+     * and is not on PostgreSQL, where a uuid column was what would have been
+     * created.
+     *
+     * Sqlite is the loose one: it records no width, so a UUID and a ULID are
+     * indistinguishable there. That is why every column the migration is
+     * checked on has to line up rather than resting on the key alone.
+     *
+     * A driver this package does not know cannot be held to a shape, so there
+     * the check falls back to ruling out the auto-incrementing key that
+     * Laravel's own migration would have left behind.
+     *
+     * @param  array<array-key, mixed>  $column
+     * @param  string  $driver
+     * @return bool
+     */
+    public static function keyColumnHoldsUuid(array $column, $driver)
+    {
+        if (($column['auto_increment'] ?? false) === true) {
+            return false;
+        }
+
+        $name = $column['type_name'] ?? '';
+        $type = $column['type'] ?? '';
+
+        if (! is_string($name) || ! is_string($type)) {
+            return false;
+        }
+
+        $name = (string) preg_replace('/[\s(].*$/', '', strtolower(trim($name)));
+        $length = static::declaredLength($type) ?? static::declaredLength($name);
+
+        return match ($driver) {
+            'pgsql' => $name === 'uuid',
+            'mysql', 'mariadb' => $name === 'char' && ($length === null || $length === 36),
+            'sqlite' => $name === 'varchar',
+            'sqlsrv' => $name === 'uniqueidentifier',
+            default => ! static::isIntegerType($name),
+        };
+    }
+
+    /**
+     * Determine if the given type name is an integer, whatever it is called.
+     *
+     * @param  string  $type
+     * @return bool
+     */
+    protected static function isIntegerType($type)
+    {
+        return in_array($type, [
+            'int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'mediumint',
+            'smallint', 'tinyint', 'serial', 'bigserial', 'serial2', 'serial4', 'serial8',
+        ], true);
+    }
+
+    /**
+     * Read the declared width out of a column type such as "char(36)".
+     *
+     * @return int|null
+     */
+    protected static function declaredLength(string $type)
+    {
+        return preg_match('/\((\d+)\)/', $type, $matches) === 1 ? (int) $matches[1] : null;
     }
 
     /**

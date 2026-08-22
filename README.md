@@ -72,6 +72,31 @@ php artisan jetstream:install livewire
 php artisan migrate --seed
 ```
 
+> **If your application had already migrated before installing** — `laravel new`
+> and `composer create-project` both offer to do that — the installer stops before
+> changing any application scaffolding or the database, and tells you. (It publishes
+> the migrations first, so that the rebuild it points you at has something correct
+> to build from.) Jetstream publishes its own version of
+> `0001_01_01_000000_create_users_table` over Laravel's, and that migration creates
+> `users`, `password_reset_tokens` and `sessions`. Laravel tracks migrations by
+> name, so if the name is already recorded the replacement never runs: you keep an
+> auto-incrementing `users.id` and an integer `sessions.user_id` while everything
+> referencing them expects a UUID — and the installer sets `SESSION_DRIVER=database`,
+> so that second one breaks every request. The installer checks Laravel's migration
+> ledger against the tables actually present and refuses when they disagree in
+> either direction. It never rebuilds the database for you — an empty users table
+> is not an empty database. Once you have backed up or discarded whatever this
+> database holds, rebuild it yourself:
+>
+> ```bash
+> php artisan migrate:fresh --seed   # drops every table
+> ```
+>
+> The installer stops for the same reason if it cannot read the database at all —
+> a connection failure, a permission denial, unreadable table metadata. It runs
+> `artisan migrate` itself, so a database it cannot inspect is one it would be
+> migrating blind; that is refused rather than assumed to be clean.
+
 Flag your own user as the system administrator by setting `JETSTREAM_ADMIN_EMAIL` in `.env`, then (after registering that user) run:
 
 ```bash
