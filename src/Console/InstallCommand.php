@@ -787,6 +787,10 @@ EOF;
      * Or the name is not recorded and the tables exist anyway, in which case
      * the migration does run and "Schema::create" fails on the first one.
      *
+     * A database that cannot be inspected at all is refused the same way. It
+     * is not a database that has been shown to be clean, and this command runs
+     * "artisan migrate" itself, so proceeding would mean migrating blind.
+     *
      * The database is never repaired here. Rebuilding it drops every table,
      * and an application can hold data this command knows nothing about, so
      * the operator is told what to run and installation stops.
@@ -807,10 +811,25 @@ EOF;
             $mismatch = static::usersMigrationMismatch(
                 $recorded, $tables, Schema::getConnection()->getDriverName()
             );
-        } catch (Throwable) {
-            // The database cannot be inspected — it may not exist yet. Leave
-            // the decision to "artisan migrate" as before.
-            return true;
+        } catch (Throwable $e) {
+            // A database that cannot be inspected is not a database that has
+            // been cleared. Connection failures, a repository an application
+            // has replaced, permissions, unreadable table metadata — none of
+            // them say the replacement migration will apply, and the installer
+            // goes on to run "artisan migrate" itself, so carrying on means
+            // migrating blind. Uncertainty is refused like a mismatch.
+            $this->migrationsWereBlocked = true;
+
+            $this->components->error(
+                'Jetstream could not verify the database schema: '.$e->getMessage()
+            );
+
+            $this->components->warn(
+                'This command migrates the database itself, so it needs one it can read. Nothing has been installed '
+                .'or migrated. Fix the connection and run this command again.'
+            );
+
+            return false;
         }
 
         if ($mismatch === null) {
