@@ -195,3 +195,58 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ":memory:"
+
+      # Last, because it deliberately breaks the application's migrations and
+      # re-runs the installer over the top of a working install. Nothing below
+      # depends on the state this leaves behind.
+      #
+      # The installer shells out to "artisan migrate --force". If that child
+      # fails, the installer has to fail with it — the whole point of the
+      # scaffolding is that it matches the schema the migrations build.
+      - name: Fail the install when the migrations fail
+        run: |
+          cat > database/migrations/9999_12_31_235959_deliberately_broken.php <<'PHP'
+          <?php
+
+          use Illuminate\Database\Migrations\Migration;
+          use Illuminate\Support\Facades\Schema;
+
+          return new class extends Migration
+          {
+              public function up(): void
+              {
+                  // The users table is always there by now, so creating it
+                  // again is a migration that fails the way a real one does.
+                  Schema::create('users', fn () => null);
+              }
+          };
+          PHP
+
+          set +e
+          php artisan jetstream:install livewire --api --verification > /tmp/broken-install.log 2>&1
+          status=$?
+          set -e
+
+          cat /tmp/broken-install.log
+
+          if [ "$status" -eq 0 ]; then
+            echo 'The installer exited zero after its migrations failed.'
+            exit 1
+          fi
+
+          if grep -q 'installed successfully' /tmp/broken-install.log; then
+            echo 'The installer announced success after its migrations failed.'
+            exit 1
+          fi
+
+          # The installer's own verdict, and the child's reason for it, both
+          # have to survive to the operator.
+          grep -q 'The database migrations failed with exit status' /tmp/broken-install.log || {
+            echo 'The installer did not report the migration failure.'
+            exit 1
+          }
+
+          grep -q 'deliberately_broken' /tmp/broken-install.log || {
+            echo 'The migration output was swallowed.'
+            exit 1
+          }
