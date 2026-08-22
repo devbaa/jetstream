@@ -38,82 +38,107 @@ class InstallCommandSchemaGuardTest extends OrchestraTestCase
     }
 
     /**
-     * @return array<string, array{list<array<string, mixed>>, bool}>
+     * A key column as the given driver reports it.
+     *
+     * @return array<string, mixed>
      */
-    public static function usersTableProvider(): array
+    protected static function key(string $typeName, string $type = '', bool $autoIncrement = false): array
     {
-        $uuid = ['type_name' => 'uuid', 'type' => 'uuid', 'auto_increment' => false];
-        $char36 = ['type_name' => 'char', 'type' => 'char(36)', 'auto_increment' => false];
-        $varchar = ['type_name' => 'varchar', 'type' => 'varchar', 'auto_increment' => false];
-        $bigint = ['type_name' => 'bigint', 'type' => 'bigint(20) unsigned', 'auto_increment' => true];
-
         return [
-            // What this package's migration actually produces, per driver.
-            'postgres uuid key' => [self::table($uuid), true],
-            'mysql char(36) key' => [self::table($char36), true],
-            'sqlite varchar key' => [self::table($varchar), true],
-
-            // An integer key means Laravel's migration built the table.
-            'laravel stock table' => [self::table($bigint, []), false],
-            'integer key without auto increment' => [
-                self::table(['type_name' => 'bigint', 'type' => 'bigint', 'auto_increment' => false]),
-                false,
-            ],
-
-            // Upstream Laravel Jetstream adds both columns over an
-            // auto-incrementing key, so the columns alone prove nothing.
-            'upstream jetstream table' => [self::table($bigint), false],
-
-            // The same skipped migration by another route: the key happens to
-            // be compatible, but Jetstream's columns were never added.
-            'uuid key without jetstream columns' => [self::table($uuid, []), false],
-            'uuid key missing one jetstream column' => [self::table($uuid, ['current_team_id']), false],
-
-            // Other identifier schemes are not this package's schema.
-            'mysql ulid key' => [
-                self::table(['type_name' => 'char', 'type' => 'char(26)', 'auto_increment' => false]),
-                false,
-            ],
-            'binary key' => [
-                self::table(['type_name' => 'binary', 'type' => 'binary(16)', 'auto_increment' => false]),
-                false,
-            ],
-
-            'no id column at all' => [[['name' => 'name', 'type_name' => 'varchar']], false],
+            'type_name' => $typeName,
+            'type' => $type === '' ? $typeName : $type,
+            'auto_increment' => $autoIncrement,
         ];
     }
 
     /**
-     * @param  list<array<string, mixed>>  $columns
+     * @return array<string, array{string, array<string, mixed>, bool}>
      */
-    #[DataProvider('usersTableProvider')]
-    public function test_only_the_table_this_package_creates_is_accepted(array $columns, bool $compatible): void
+    public static function keyColumnProvider(): array
     {
-        $mismatch = InstallCommand::usersTableMismatch($columns);
+        return [
+            // What "$table->uuid('id')" produces on each driver.
+            'pgsql uuid' => ['pgsql', self::key('uuid'), true],
+            'mysql char(36)' => ['mysql', self::key('char', 'char(36)'), true],
+            'mariadb char(36)' => ['mariadb', self::key('char', 'char(36)'), true],
+            'sqlite varchar' => ['sqlite', self::key('varchar'), true],
 
-        $this->assertSame($compatible, $mismatch === null, (string) $mismatch);
+            // A shape another driver produces is not this driver's schema.
+            'pgsql varchar is not a uuid column' => ['pgsql', self::key('varchar', 'character varying(255)'), false],
+            'pgsql text is not a uuid column' => ['pgsql', self::key('text'), false],
+            'pgsql char(36) is not a uuid column' => ['pgsql', self::key('char', 'character(36)'), false],
+            'mysql varchar is not char(36)' => ['mysql', self::key('varchar', 'varchar(255)'), false],
+            'mysql text is not char(36)' => ['mysql', self::key('text'), false],
+            'mysql char(26) is a ulid' => ['mysql', self::key('char', 'char(26)'), false],
+            'sqlite text is not what uuid() writes' => ['sqlite', self::key('text'), false],
+
+            // Laravel's own migration, on every driver.
+            'pgsql stock key' => ['pgsql', self::key('int8', 'bigint', true), false],
+            'mysql stock key' => ['mysql', self::key('bigint', 'bigint(20) unsigned', true), false],
+            'sqlite stock key' => ['sqlite', self::key('integer', 'integer', true), false],
+
+            // An unfamiliar driver cannot be held to a shape, so only the
+            // stock integer key is ruled out.
+            'unknown driver rejects an integer key' => ['firebird', self::key('bigint', 'bigint', true), false],
+            'unknown driver rejects a bare integer type' => ['firebird', self::key('integer'), false],
+            'unknown driver accepts a string key' => ['firebird', self::key('varchar', 'varchar(36)'), true],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $key
+     */
+    #[DataProvider('keyColumnProvider')]
+    public function test_each_driver_is_checked_against_the_shape_it_produces(
+        string $driver,
+        array $key,
+        bool $holdsUuid
+    ): void {
+        $this->assertSame($holdsUuid, InstallCommand::keyColumnHoldsUuid($key, $driver));
+    }
+
+    public function test_the_columns_jetstream_adds_are_required_as_well(): void
+    {
+        $uuid = self::key('uuid');
+
+        // Upstream Laravel Jetstream adds both columns over an
+        // auto-incrementing key, so the columns alone prove nothing...
+        $this->assertNotNull(InstallCommand::usersTableMismatch(
+            self::table(self::key('int8', 'bigint', true)), 'pgsql'
+        ));
+
+        // ...and the same skipped migration by another route: a compatible
+        // key, but Jetstream's columns were never added.
+        $this->assertNotNull(InstallCommand::usersTableMismatch(self::table($uuid, []), 'pgsql'));
+        $this->assertNotNull(InstallCommand::usersTableMismatch(
+            self::table($uuid, ['current_team_id']), 'pgsql'
+        ));
+
+        $this->assertNull(InstallCommand::usersTableMismatch(self::table($uuid), 'pgsql'));
     }
 
     public function test_the_mismatch_says_which_half_of_the_contract_failed(): void
     {
         $this->assertStringContainsString('does not hold a UUID', (string) InstallCommand::usersTableMismatch(
-            self::table(['type_name' => 'bigint', 'type' => 'bigint(20) unsigned', 'auto_increment' => true])
+            self::table(self::key('bigint', 'bigint(20) unsigned', true)), 'mysql'
         ));
 
         $this->assertStringContainsString('current_team_id', (string) InstallCommand::usersTableMismatch(
-            self::table(['type_name' => 'uuid', 'type' => 'uuid', 'auto_increment' => false], [])
+            self::table(self::key('uuid'), []), 'pgsql'
         ));
 
         $this->assertStringContainsString('no id column', (string) InstallCommand::usersTableMismatch(
-            [['name' => 'email', 'type_name' => 'varchar']]
+            [['name' => 'email', 'type_name' => 'varchar']], 'pgsql'
         ));
     }
 
     public function test_the_schema_this_package_migrates_is_accepted(): void
     {
         // Checked against a real users table built by this package's own
-        // migrations, rather than a hand-written description of one.
-        $this->assertNull(InstallCommand::usersTableMismatch(Schema::getColumns('users')));
+        // migrations, on whichever driver the suite is running against.
+        $this->assertNull(InstallCommand::usersTableMismatch(
+            Schema::getColumns('users'), Schema::getConnection()->getDriverName()
+        ));
     }
 
     public function test_the_installer_never_runs_a_destructive_command(): void
@@ -124,7 +149,7 @@ class InstallCommandSchemaGuardTest extends OrchestraTestCase
         //
         // Every string literal in the file is examined, so neither quoting
         // style hides one. A command assembled from a variable would escape
-        // this, which is why the guard is also covered behaviourally above.
+        // this.
         $file = (string) (new ReflectionClass(InstallCommand::class))->getFileName();
         $destructive = ['migrate:fresh', 'migrate:reset', 'migrate:refresh', 'db:wipe', 'migrate:rollback'];
 

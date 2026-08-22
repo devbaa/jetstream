@@ -165,30 +165,66 @@ class InstallCommand extends Command implements PromptsForMissingInput
             $this->callSilent('vendor:publish', ['--tag' => $tag, '--force' => true]);
         }
 
-        // Fortify's tag stamps every file it publishes with the current
-        // date-time, so publishing it a second time writes a second copy of
-        // each migration under a new name rather than overwriting the first,
-        // and the duplicate fails the very next "php artisan migrate". This
-        // command can legitimately be run more than once — after rebuilding a
-        // database it refused, for instance — so publish it only when it has
-        // not been published already. Its tag also covers the passkeys table,
-        // which is why "passkeys-migrations" is never published separately.
-        if (! $this->hasPublishedMigration('add_two_factor_columns_to_users_table')) {
-            $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
+        $this->publishFortifyMigrations();
+    }
+
+    /**
+     * Publish Fortify's migrations without duplicating any already present.
+     *
+     * Fortify's tag stamps every file it publishes with the current date-time
+     * rather than overwriting, so publishing it twice leaves two copies of a
+     * migration and the duplicate fails the very next "php artisan migrate".
+     * The tag covers more than one migration — its own, and the passkeys table
+     * it integrates — so no single file can stand in for the group: an
+     * application that used Fortify before passkeys were part of it has one
+     * but not the other, and either skipping or publishing wholesale gets that
+     * case wrong.
+     *
+     * So the group is published, and any file it just wrote for a migration
+     * that was already present is removed again. What is left is each
+     * migration exactly once, whichever of them existed beforehand.
+     *
+     * @return void
+     */
+    protected function publishFortifyMigrations()
+    {
+        $before = $this->publishedMigrations();
+
+        $this->callSilent('vendor:publish', ['--tag' => 'fortify-migrations', '--force' => true]);
+
+        foreach ($this->publishedMigrations() as $migration => $paths) {
+            if (! isset($before[$migration])) {
+                continue;
+            }
+
+            foreach (array_diff($paths, $before[$migration]) as $duplicate) {
+                (new Filesystem)->delete($duplicate);
+            }
         }
     }
 
     /**
-     * Determine if a migration with the given name has already been published.
+     * Get the published migration files, grouped by name without their stamp.
      *
-     * @param  string  $name
-     * @return bool
+     * @return array<string, list<string>>
      */
-    protected function hasPublishedMigration($name)
+    protected function publishedMigrations()
     {
-        $matches = glob(database_path('migrations/*_'.$name.'.php'));
+        $migrations = [];
 
-        return is_array($matches) && $matches !== [];
+        foreach ((array) glob(database_path('migrations/*.php')) as $path) {
+            if (! is_string($path)) {
+                continue;
+            }
+
+            $name = (string) preg_replace(
+                '/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($path, '.php')
+            );
+
+            $migrations[$name][] = $path;
+        }
+
+        return $migrations;
     }
 
     /**
@@ -740,7 +776,9 @@ EOF;
                 return true;
             }
 
-            $mismatch = static::usersTableMismatch(Schema::getColumns('users'));
+            $mismatch = static::usersTableMismatch(
+                Schema::getColumns('users'), Schema::getConnection()->getDriverName()
+            );
         } catch (Throwable) {
             // The database cannot be inspected — it may not exist yet. Leave
             // the decision to "artisan migrate" as before.
@@ -780,9 +818,10 @@ EOF;
      * columns, which is the same skipped migration by another route.
      *
      * @param  iterable<mixed>  $columns
+     * @param  string  $driver
      * @return string|null  the mismatch, or null when the table matches
      */
-    public static function usersTableMismatch(iterable $columns)
+    public static function usersTableMismatch(iterable $columns, $driver)
     {
         $found = [];
 
@@ -796,7 +835,7 @@ EOF;
             return 'it has no id column';
         }
 
-        if (! static::keyColumnHoldsUuid($found['id'])) {
+        if (! static::keyColumnHoldsUuid($found['id'], $driver)) {
             return 'its id column does not hold a UUID';
         }
 
@@ -814,16 +853,25 @@ EOF;
     /**
      * Determine if the given key column holds a UUID, as this package writes it.
      *
-     * Each supported database renders "$table->uuid('id')" differently:
-     * PostgreSQL has a uuid type, MySQL stores it as char(36), and sqlite
-     * records a bare varchar. Sqlite is the loose one — it keeps no width, so
-     * a UUID and a ULID look identical there — which is why the required
-     * columns are checked as well rather than resting on the key alone.
+     * Each database renders "$table->uuid('id')" as its own type, so each is
+     * checked against the one it actually produces rather than against the
+     * union of all of them — a varchar key is this package's schema on sqlite
+     * and is not on PostgreSQL, where a uuid column was what would have been
+     * created.
+     *
+     * Sqlite is the loose one: it records no width, so a UUID and a ULID are
+     * indistinguishable there. That is why the columns Jetstream adds are
+     * checked as well rather than resting on the key alone.
+     *
+     * A driver this package does not know cannot be held to a shape, so there
+     * the check falls back to ruling out the auto-incrementing key that
+     * Laravel's own migration would have left behind.
      *
      * @param  array<array-key, mixed>  $column
+     * @param  string  $driver
      * @return bool
      */
-    public static function keyColumnHoldsUuid(array $column)
+    public static function keyColumnHoldsUuid(array $column, $driver)
     {
         if (($column['auto_increment'] ?? false) === true) {
             return false;
@@ -839,13 +887,27 @@ EOF;
         $name = (string) preg_replace('/[\s(].*$/', '', strtolower(trim($name)));
         $length = static::declaredLength($type) ?? static::declaredLength($name);
 
-        return match ($name) {
-            'uuid' => true,
-            // A shorter fixed width is a different identifier: a ULID is 26.
-            'char' => $length === null || $length === 36,
-            'varchar', 'character varying', 'text' => $length === null || $length >= 36,
-            default => false,
+        return match ($driver) {
+            'pgsql' => $name === 'uuid',
+            'mysql', 'mariadb' => $name === 'char' && ($length === null || $length === 36),
+            'sqlite' => $name === 'varchar',
+            'sqlsrv' => $name === 'uniqueidentifier',
+            default => ! static::isIntegerType($name),
         };
+    }
+
+    /**
+     * Determine if the given type name is an integer, whatever it is called.
+     *
+     * @param  string  $type
+     * @return bool
+     */
+    protected static function isIntegerType($type)
+    {
+        return in_array($type, [
+            'int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'mediumint',
+            'smallint', 'tinyint', 'serial', 'bigserial', 'serial2', 'serial4', 'serial8',
+        ], true);
     }
 
     /**
