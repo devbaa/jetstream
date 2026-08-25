@@ -611,6 +611,8 @@ Without `--force`: the migrations you already have stay exactly as they are, and
 
 A generated `account_key` column now holds the customer account id, or the empty string when there is none, and the unique index spans `(tenant_id, account_key, email)`. It is generated rather than written, so it cannot drift from the account it stands for, and it replaces the old index rather than joining it. Inviting the same person to two different accounts, or in two different tenants, or again after an invitation is accepted or cancelled, is unaffected.
 
+Invitation addresses are **not** normalized by this change, so what counts as the same address is the column and index collation rather than anything the package decides. Laravel's default MySQL and MariaDB collation is case-insensitive, so `Jane@example.com` and `jane@example.com` collide there; PostgreSQL and sqlite compare them as distinct and admit both. If you need one answer on every engine, canonicalize the address before inviting — `Jetstream::normalizeEmail()` is what the recovery-email flow uses for the same reason.
+
 The migration is published under the tenant tag:
 
 ```bash

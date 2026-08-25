@@ -63,12 +63,20 @@ return new class extends Migration
      * confirm it. The alternative is an expression whose correctness depends
      * on which MariaDB version the application happens to be running.
      *
-     * The spellings differ because the engines do. MySQL and MariaDB accept
-     * only char/nchar in CAST, never varchar. SQL Server accepts varchar but
-     * reads an unqualified one as varchar(30), which would silently truncate a
-     * 36-character UUID and leave the key standing for a prefix of the account
-     * rather than the account, so the length there is load-bearing.
-     * PostgreSQL's unqualified varchar is unbounded and needs none.
+     * The spellings differ because the engines do. char(36) is the portable
+     * CAST spelling across the MySQL and MariaDB versions this package
+     * supports. SQL Server accepts varchar but reads an unqualified one as
+     * varchar(30), which would silently truncate a 36-character UUID and leave
+     * the key standing for a prefix of the account rather than the account, so
+     * the length there is load-bearing. PostgreSQL's unqualified varchar is
+     * unbounded and needs none.
+     *
+     * What the index then treats as the same email is the column's collation,
+     * not anything decided here. Laravel's default MySQL and MariaDB collation
+     * is case-insensitive, so two invitations differing only in the case of the
+     * address collide there; PostgreSQL and sqlite compare them as distinct.
+     * This migration deliberately does not normalize the address — canonical
+     * email storage is its own change, with its own semantics.
      */
     public function expression(string $driver): string
     {

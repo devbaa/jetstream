@@ -221,6 +221,21 @@ class CustomerInvitationUniquenessTest extends OrchestraTestCase
         $this->assertSame((string) $account->getKey(), DB::table('customer_invitations')->value('account_key'));
     }
 
+    public function test_the_address_is_stored_exactly_as_it_was_given(): void
+    {
+        // This change does not canonicalize invitation addresses, so what the
+        // index treats as the same address is the column's collation and not
+        // anything decided here — case variants collide on Laravel's default
+        // case-insensitive MySQL and MariaDB collation and stay distinct on
+        // PostgreSQL and sqlite. Only what the package itself controls is
+        // pinned: it stores the address it was handed, untouched.
+        [$owner, $tenant] = $this->createOwnerAndTenant();
+
+        $this->insertInvitation($tenant, 'Jane.Doe@Example.test');
+
+        $this->assertSame('Jane.Doe@Example.test', DB::table('customer_invitations')->value('email'));
+    }
+
     public function test_the_action_still_reports_a_duplicate_as_a_validation_error(): void
     {
         // The database is what decides, but an operator inviting the same

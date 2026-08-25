@@ -127,7 +127,8 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
             // would truncate a 36-character UUID; the length is load-bearing.
             'sqlsrv' => ['sqlsrv', "coalesce(cast(customer_account_id as varchar(36)), '')"],
 
-            // MySQL and MariaDB accept only char/nchar in CAST, never varchar.
+            // char(36) is the portable CAST spelling across the MySQL and
+            // MariaDB versions this package supports.
             'mysql' => ['mysql', "coalesce(cast(customer_account_id as char(36)), '')"],
             'mariadb' => ['mariadb', "coalesce(cast(customer_account_id as char(36)), '')"],
 
@@ -145,11 +146,12 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
 
     public function test_only_sqlite_is_trusted_to_hold_the_account_as_a_string(): void
     {
-        // Grouped by what the driver does with a uuid column, not by anything
-        // about its name. Everything except sqlite either stores it as a
-        // non-character type or decides per server version, and an expression
-        // whose correctness depends on which MariaDB an application happens to
-        // run is not a contract.
+        // sqlite is the only driver deliberately left uncast; every other one
+        // converts. That is the strategy, not an inference from column types:
+        // MySQL casts even though its uuid column is already char(36), so that
+        // the expression does not quietly depend on which server version an
+        // application runs — the MariaDB grammar picks a native uuid from 10.7,
+        // and a contract that changes under it is not a contract.
         foreach (['pgsql', 'sqlsrv', 'mysql', 'mariadb'] as $driver) {
             $this->assertStringContainsString('cast(customer_account_id as ', $this->migration()->expression($driver));
         }
@@ -215,25 +217,6 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
         $blueprint->uuid('customer_account_id');
 
         $this->assertStringContainsString($type, implode(' ', $blueprint->toSql()));
-    }
-
-    public function test_the_running_driver_stores_the_account_as_the_expression_assumes(): void
-    {
-        // For real, against the schema this connection actually built: if the
-        // column is character data the expression leaves it alone, and if it
-        // is not, the expression converts it.
-        $type = collect(Schema::getColumns('customer_invitations'))
-            ->firstWhere('name', 'customer_account_id')['type'] ?? null;
-
-        $this->assertIsString($type);
-
-        $character = (bool) preg_match('/char|text|varying/i', $type);
-
-        $expression = $this->migration()->expression(Schema::getConnection()->getDriverName());
-
-        $character
-            ? $this->assertStringNotContainsString('cast(', $expression, "The column is {$type} and needs no conversion.")
-            : $this->assertStringContainsString('cast(', $expression, "The column is {$type} and cannot be coalesced with a string.");
     }
 
     public function test_the_index_is_named_by_its_columns(): void
