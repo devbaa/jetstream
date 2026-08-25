@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\Grammars\Grammar;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -15,7 +17,11 @@ return new class extends Migration
      * migration. That migration types tokenable_id with morphs() — an
      * auto-incrementing integer — while every user this package creates has a
      * UUID key, so the first token an application issues is rejected outright
-     * on PostgreSQL. sqlite stores it and says nothing.
+     * on PostgreSQL. sqlite accepts it: its typing is dynamic, so a column
+     * with integer affinity keeps a value that is not a well-formed integer as
+     * text and the UUID survives intact. It is permitting a contract stricter
+     * engines reject rather than damaging anything, which is why this went
+     * unnoticed for as long as it did.
      *
      * A string rather than a UUID, for the reason audit_logs.auditable_id is
      * one: tokenable is polymorphic and the table is Sanctum's, not this
@@ -96,9 +102,47 @@ return new class extends Migration
     public function down(): void
     {
         $this->retypeTokenableId(function (): void {
+            $connection = Schema::getConnection();
+
+            if ($this->needsExplicitNarrowingCast($connection->getDriverName())) {
+                DB::statement($this->narrowingSql($connection->getSchemaGrammar()));
+
+                return;
+            }
+
             Schema::table('personal_access_tokens', function (Blueprint $table) {
                 $table->foreignId('tokenable_id')->change();
             });
         });
+    }
+
+    /**
+     * Whether the driver refuses to narrow a string to an integer on its own.
+     *
+     * PostgreSQL has no assignment cast from a string type to a numeric one —
+     * that conversion is explicit-only — so ALTER COLUMN needs the cast
+     * written out, and says so on an empty table as readily as a full one.
+     * Without it the rollback fails for the wrong reason entirely, before it
+     * ever reaches the rows that genuinely cannot be narrowed.
+     */
+    public function needsExplicitNarrowingCast(string $driver): bool
+    {
+        return $driver === 'pgsql';
+    }
+
+    /**
+     * The narrowing statement, for drivers that need the cast written out.
+     *
+     * Built through the connection's grammar so the table prefix and the
+     * identifier quoting are the ones every other schema call here uses.
+     */
+    public function narrowingSql(Grammar $grammar): string
+    {
+        return sprintf(
+            'alter table %s alter column %s type bigint using %s::bigint',
+            $grammar->wrapTable('personal_access_tokens'),
+            $grammar->wrap('tokenable_id'),
+            $grammar->wrap('tokenable_id'),
+        );
     }
 };

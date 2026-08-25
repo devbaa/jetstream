@@ -587,7 +587,7 @@ Invoice::withoutTenancy()->get();
 
 Nothing else about the API changed: `bypass()`, `runFor()`, `withoutTenancy()` and `$tenantOptional` behave exactly as before when a tenant *is* in context.
 
-**Sanctum's token column is no longer an integer.** `personal_access_tokens.tokenable_id` came from Sanctum's own migration as an auto-incrementing integer, which no UUID user key fits into: on PostgreSQL the first token an application issued was rejected outright, and sqlite stored it wrong in silence. Fresh installs now get the right column because the installer corrects the migration before it is run. An application already installed needs the widening migration published and run:
+**Sanctum's token column is no longer an integer.** `personal_access_tokens.tokenable_id` came from Sanctum's own migration as an auto-incrementing integer, which no UUID user key fits into: on PostgreSQL the first token an application issued was rejected outright. sqlite accepted it — its typing is dynamic, so an integer-affinity column simply keeps a value that is not a well-formed integer as text, and the UUID round trips intact. Nothing was corrupted; sqlite was permitting a schema contract that stricter engines reject, which is why the mismatch went unnoticed. Fresh installs now get the right column because the installer corrects the migration before it is run. An application already installed needs the widening migration published and run:
 
 ```bash
 php artisan vendor:publish --tag=jetstream-migrations

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Tests;
 
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Tests\Fixtures\User;
@@ -74,9 +76,23 @@ class SanctumTokenKeyTypeTest extends OrchestraTestCase
 
     protected function tearDown(): void
     {
-        Schema::dropIfExists('personal_access_tokens');
+        try {
+            Schema::dropIfExists('personal_access_tokens');
+        } catch (QueryException) {
+            // A test that asserts a statement is rejected leaves PostgreSQL's
+            // transaction aborted, and it refuses everything after that. The
+            // refresh rolls it back either way, so there is nothing to clean.
+        }
 
         parent::tearDown();
+    }
+
+    /**
+     * The widening migration this package ships.
+     */
+    protected function widening(): \Illuminate\Database\Migrations\Migration
+    {
+        return require __DIR__.'/../database/migrations/2026_08_27_100000_widen_sanctum_tokenable_id.php';
     }
 
     protected function createUser(string $email = 'taylor@laravel.com'): User
@@ -159,6 +175,79 @@ class SanctumTokenKeyTypeTest extends OrchestraTestCase
         $migration->up();
 
         $this->assertFalse(Schema::hasTable('personal_access_tokens'));
+    }
+
+    public function test_the_widening_rolls_back_and_forward_on_an_empty_table(): void
+    {
+        // down() was not exercised at all until now. On PostgreSQL there is no
+        // assignment cast from a string type to a numeric one, so narrowing
+        // needs the cast spelled out — and fails without it whether or not the
+        // table holds anything, which would hide the real reason a rollback
+        // should be refused.
+        $migration = $this->widening();
+
+        $migration->down();
+
+        $this->assertTrue(Schema::hasTable('personal_access_tokens'));
+
+        $migration->up();
+
+        // ...and after the round trip the column still takes a UUID key.
+        $user = $this->createUser();
+
+        $this->assertSame(
+            (string) $user->getKey(),
+            (string) $user->createToken('probe')->accessToken->tokenable_id
+        );
+    }
+
+    public function test_rolling_back_numeric_history_keeps_it(): void
+    {
+        // A token issued to a model of the application's own with an integer
+        // key narrows back cleanly, because it genuinely fits.
+        DB::table('personal_access_tokens')->insert([
+            'tokenable_type' => 'App\\Models\\Widget',
+            'tokenable_id' => '7',
+            'name' => 'probe',
+            'token' => str_repeat('a', 64),
+        ]);
+
+        $this->widening()->down();
+
+        $this->assertSame('7', (string) DB::table('personal_access_tokens')->value('tokenable_id'));
+    }
+
+    public function test_rolling_back_a_uuid_owned_token_is_refused_where_types_are_enforced(): void
+    {
+        // A token issued to a UUID user does not fit in the old column, and
+        // this is the condition down() is meant to refuse on — reachable only
+        // now that the narrowing gets past the cast.
+        //
+        // The two engines part company here, and the difference is the whole
+        // reason this finding survived: sqlite's typing is dynamic, so an
+        // integer-affinity column keeps a value that is not a well-formed
+        // integer as text. The UUID is not truncated or coerced — it round
+        // trips intact — so sqlite has nothing to object to. It is permitting
+        // a schema contract that stricter engines reject, not corrupting
+        // anything.
+        $user = $this->createUser();
+
+        $user->createToken('probe');
+
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            $this->widening()->down();
+
+            $this->assertSame(
+                (string) $user->getKey(),
+                (string) DB::table('personal_access_tokens')->value('tokenable_id')
+            );
+
+            return;
+        }
+
+        $this->expectException(QueryException::class);
+
+        $this->widening()->down();
     }
 
     public function test_tokens_of_different_users_do_not_bleed(): void

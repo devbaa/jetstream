@@ -186,8 +186,10 @@ jobs:
 
       # install:api publishes Sanctum's migration, which types tokenable_id as
       # an auto-incrementing integer while every user this package creates has
-      # a UUID key. sqlite stores the mismatch silently, so the shape of the
-      # column the real installer produced is what has to be asserted.
+      # a UUID key. sqlite accepts the mismatch — its dynamic typing keeps the
+      # UUID as text in an integer-affinity column — so the shape of the column
+      # the real installer produced is what has to be asserted, not whether a
+      # token happens to store here.
       - name: Sanctum's token column takes this application's user keys
         run: |
           php -r '

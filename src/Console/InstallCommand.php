@@ -254,8 +254,10 @@ class InstallCommand extends Command implements PromptsForMissingInput
      * "install:api" publishes Sanctum's own migration, which types
      * tokenable_id with morphs() — an auto-incrementing integer — while every
      * user this package creates has a UUID key. Left alone, the first token
-     * the application issues is rejected on any database that checks the
-     * type, and quietly stored wrong on the ones that do not.
+     * the application issues is rejected on any database that enforces the
+     * type. sqlite does not: its dynamic typing keeps the UUID as text in an
+     * integer-affinity column, so the mismatch is invisible there rather than
+     * damaging.
      *
      * It is rewritten here rather than only altered afterwards because the
      * file Sanctum publishes is stamped with the current date-time, so a
