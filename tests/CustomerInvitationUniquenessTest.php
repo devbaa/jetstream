@@ -262,6 +262,11 @@ class CustomerInvitationUniquenessTest extends OrchestraTestCase
             $this->insertInvitation($tenant, 'jane@example.test');
         };
 
+        // Disarmed after it fires rather than removed afterwards. Eloquent
+        // boots a model class once per process, and flushEventListeners()
+        // takes every listener with it — including the creating hook
+        // BelongsToTenant registered to stamp tenant_id, which no later test
+        // in the process would get back.
         CustomerInvitation::creating(function () use (&$duplicate): void {
             if ($duplicate !== null) {
                 $insert = $duplicate;
@@ -274,15 +279,11 @@ class CustomerInvitationUniquenessTest extends OrchestraTestCase
 
         $this->expectException(ValidationException::class);
 
-        try {
-            // A savepoint of its own: a rejected statement aborts the
-            // surrounding transaction on PostgreSQL, and the suite's
-            // per-test transaction still has a rollback to perform.
-            DB::transaction(fn () => app(TenantContext::class)->runFor(
-                $tenant, fn () => (new InviteCustomer)->invite($owner, $tenant, 'jane@example.test')
-            ));
-        } finally {
-            CustomerInvitation::flushEventListeners();
-        }
+        // A savepoint of its own: a rejected statement aborts the surrounding
+        // transaction on PostgreSQL, and the suite's per-test transaction
+        // still has a rollback to perform.
+        DB::transaction(fn () => app(TenantContext::class)->runFor(
+            $tenant, fn () => (new InviteCustomer)->invite($owner, $tenant, 'jane@example.test')
+        ));
     }
 }

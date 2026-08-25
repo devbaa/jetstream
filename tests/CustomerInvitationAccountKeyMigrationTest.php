@@ -6,7 +6,13 @@ namespace Laravel\Jetstream\Tests;
 
 use App\Actions\Jetstream\CreateTenant;
 use App\Models\Tenant;
+use Illuminate\Database\MariaDbConnection;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\MySqlConnection;
+use Illuminate\Database\PostgresConnection;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\SQLiteConnection;
+use Illuminate\Database\SqlServerConnection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
@@ -15,6 +21,7 @@ use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\Tests\Fixtures\TenantPolicy;
 use Laravel\Jetstream\Tests\Fixtures\User;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 
 /**
  * The account_key migration says the right thing to each driver, and repairs
@@ -82,33 +89,72 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
     {
         // customer_account_id is a native uuid there, and coalesce insists
         // both of its branches share a type. Without the cast the generated
-        // column cannot be created at all.
+        // column cannot be created at all. PostgreSQL's unqualified varchar is
+        // unbounded, so it needs no length.
         $expression = $this->migration()->expression('pgsql');
 
-        $this->assertStringContainsString('cast(customer_account_id as varchar)', $expression);
-        $this->assertStringContainsString("''", $expression);
+        $this->assertSame("coalesce(cast(customer_account_id as varchar), '')", $expression);
+    }
+
+    public function test_sql_server_is_told_to_cast_the_uuid_to_a_bounded_string(): void
+    {
+        // foreignUuid() compiles to uniqueidentifier there, not to character
+        // data. SQL Server would convert rather than refuse, and that is worse:
+        // coalesce returns the operand with the highest data type precedence,
+        // and uniqueidentifier outranks varchar, so the '' branch would be
+        // converted to uniqueidentifier and fail on the empty string — the one
+        // case this column exists to represent.
+        $expression = $this->migration()->expression('sqlsrv');
+
+        $this->assertSame("coalesce(cast(customer_account_id as varchar(36)), '')", $expression);
+
+        // The length is load-bearing: CAST to an unqualified varchar on SQL
+        // Server means varchar(30), which truncates a 36-character UUID and
+        // leaves the key standing for a prefix of the account.
+        $this->assertStringNotContainsString('as varchar)', $expression);
     }
 
     /**
-     * @return array<string, array{string}>
+     * @return array<string, array{string, string}>
      */
-    public static function characterColumnDriverProvider(): array
+    public static function castProvider(): array
     {
         return [
-            // uuid columns are char(36) on these drivers, so coalesce already
-            // has two character operands and a cast would only add a spelling
-            // each of them disagrees about.
-            'mysql' => ['mysql'],
-            'mariadb' => ['mariadb'],
-            'sqlite' => ['sqlite'],
-            'sqlsrv' => ['sqlsrv'],
+            // Unbounded there, and the only driver whose CAST needs no length.
+            'pgsql' => ['pgsql', "coalesce(cast(customer_account_id as varchar), '')"],
+
+            // An unqualified varchar means varchar(30) on SQL Server, which
+            // would truncate a 36-character UUID; the length is load-bearing.
+            'sqlsrv' => ['sqlsrv', "coalesce(cast(customer_account_id as varchar(36)), '')"],
+
+            // MySQL and MariaDB accept only char/nchar in CAST, never varchar.
+            'mysql' => ['mysql', "coalesce(cast(customer_account_id as char(36)), '')"],
+            'mariadb' => ['mariadb', "coalesce(cast(customer_account_id as char(36)), '')"],
+
+            // The one driver where a uuid column is character data whatever
+            // the server, so there is nothing to convert.
+            'sqlite' => ['sqlite', "coalesce(customer_account_id, '')"],
         ];
     }
 
-    #[DataProvider('characterColumnDriverProvider')]
-    public function test_the_other_drivers_need_no_cast(string $driver): void
+    #[DataProvider('castProvider')]
+    public function test_each_driver_is_told_to_convert_in_its_own_spelling(string $driver, string $expression): void
     {
-        $this->assertSame("coalesce(customer_account_id, '')", $this->migration()->expression($driver));
+        $this->assertSame($expression, $this->migration()->expression($driver));
+    }
+
+    public function test_only_sqlite_is_trusted_to_hold_the_account_as_a_string(): void
+    {
+        // Grouped by what the driver does with a uuid column, not by anything
+        // about its name. Everything except sqlite either stores it as a
+        // non-character type or decides per server version, and an expression
+        // whose correctness depends on which MariaDB an application happens to
+        // run is not a contract.
+        foreach (['pgsql', 'sqlsrv', 'mysql', 'mariadb'] as $driver) {
+            $this->assertStringContainsString('cast(customer_account_id as ', $this->migration()->expression($driver));
+        }
+
+        $this->assertStringNotContainsString('cast(', $this->migration()->expression('sqlite'));
     }
 
     public function test_the_key_stands_for_the_account_on_every_driver(): void
@@ -123,6 +169,71 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
             $this->assertStringContainsString('customer_account_id', $expression);
             $this->assertStringContainsString("''", $expression);
         }
+    }
+
+    /**
+     * @return array<string, array{class-string<\Illuminate\Database\Connection>, string}>
+     */
+    public static function uuidColumnTypeProvider(): array
+    {
+        // Only the two whose typeUuid() is unconditional, and so can be
+        // compiled without a server to ask. MariaDB's consults the server
+        // version, MySQL's blueprint compilation does, and sqlite's does —
+        // asking them through a connection that has none would answer from
+        // whatever the stub defaults to, which is not evidence of anything.
+        // The driver the suite is running on is checked against its real
+        // schema below instead.
+        return [
+            'pgsql' => [PostgresConnection::class, 'uuid'],
+            'sqlsrv' => [SqlServerConnection::class, 'uniqueidentifier'],
+        ];
+    }
+
+    /**
+     * @param  class-string<\Illuminate\Database\Connection>  $connection
+     */
+    #[DataProvider('uuidColumnTypeProvider')]
+    public function test_laravel_does_not_compile_a_uuid_column_to_character_data(string $connection, string $type): void
+    {
+        // The per-driver decision rests on this and nothing else, so it is
+        // asked of Laravel's own grammar rather than assumed. Assuming it is
+        // how customer_account_id came to be treated as character data on SQL
+        // Server, where the consequence is silent: SQL Server converts the
+        // other operand rather than refusing.
+        //
+        // No server is contacted: compiling DDL is the grammar's own work and
+        // the PDO closure is never called.
+        $stub = new $connection(
+            fn () => throw new RuntimeException('The grammar must not need a connection.'),
+            'jetstream', '', []
+        );
+
+        $stub->useDefaultSchemaGrammar();
+
+        $blueprint = new Blueprint($stub, 'customer_invitations');
+
+        $blueprint->uuid('customer_account_id');
+
+        $this->assertStringContainsString($type, implode(' ', $blueprint->toSql()));
+    }
+
+    public function test_the_running_driver_stores_the_account_as_the_expression_assumes(): void
+    {
+        // For real, against the schema this connection actually built: if the
+        // column is character data the expression leaves it alone, and if it
+        // is not, the expression converts it.
+        $type = collect(Schema::getColumns('customer_invitations'))
+            ->firstWhere('name', 'customer_account_id')['type'] ?? null;
+
+        $this->assertIsString($type);
+
+        $character = (bool) preg_match('/char|text|varying/i', $type);
+
+        $expression = $this->migration()->expression(Schema::getConnection()->getDriverName());
+
+        $character
+            ? $this->assertStringNotContainsString('cast(', $expression, "The column is {$type} and needs no conversion.")
+            : $this->assertStringContainsString('cast(', $expression, "The column is {$type} and cannot be coalesced with a string.");
     }
 
     public function test_the_index_is_named_by_its_columns(): void

@@ -250,6 +250,11 @@ class CustomerInvitationRaceTest extends OrchestraTestCase
             $other->commit();
         };
 
+        // Disarmed after it fires rather than removed afterwards. Eloquent
+        // boots a model class once per process, and flushEventListeners()
+        // takes every listener with it — including the creating hook
+        // BelongsToTenant registered to stamp tenant_id, which no later test
+        // in the process would get back.
         CustomerInvitation::creating(function () use (&$competitor): void {
             if ($competitor !== null) {
                 $race = $competitor;
@@ -271,8 +276,6 @@ class CustomerInvitationRaceTest extends OrchestraTestCase
             $this->fail('The invitation that lost the race was accepted anyway.');
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('email', $e->errors());
-        } finally {
-            CustomerInvitation::flushEventListeners();
         }
 
         $this->assertSame(

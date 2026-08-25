@@ -41,16 +41,43 @@ return new class extends Migration
      * safe as that value: the column it stands in for holds UUIDs, so no real
      * account key can ever collide with it.
      *
-     * PostgreSQL is the only supported driver that needs the cast spelled
-     * out — there customer_account_id is a native uuid, and coalesce insists
-     * both branches share a type. Everywhere else the column is already
-     * character data.
+     * What "none" coalesces to is a string, so the account it stands beside
+     * has to be one too — and foreignUuid() is only character data on some of
+     * these drivers. It compiles to a native uuid on PostgreSQL and to
+     * uniqueidentifier on SQL Server. On MariaDB it is char(36) or a native
+     * uuid depending on the server: since 10.7 Laravel's MariaDbGrammar asks
+     * the version and picks uuid. Only sqlite is character data whatever the
+     * server.
+     *
+     * Where the column is not a string the cast is not optional, and the two
+     * engines that can be checked here refuse it in different ways.
+     * PostgreSQL requires both branches of coalesce to share a type and will
+     * not convert between them implicitly, so the column cannot be created at
+     * all. SQL Server will convert, and that is worse: coalesce there returns
+     * the operand with the highest data type precedence, and uniqueidentifier
+     * outranks varchar — so it converts the '' branch to uniqueidentifier and
+     * fails on the empty string, which is the one case this column exists to
+     * represent.
+     *
+     * MySQL and MariaDB are cast for the same reason, with no server here to
+     * confirm it. The alternative is an expression whose correctness depends
+     * on which MariaDB version the application happens to be running.
+     *
+     * The spellings differ because the engines do. MySQL and MariaDB accept
+     * only char/nchar in CAST, never varchar. SQL Server accepts varchar but
+     * reads an unqualified one as varchar(30), which would silently truncate a
+     * 36-character UUID and leave the key standing for a prefix of the account
+     * rather than the account, so the length there is load-bearing.
+     * PostgreSQL's unqualified varchar is unbounded and needs none.
      */
     public function expression(string $driver): string
     {
-        return $driver === 'pgsql'
-            ? "coalesce(cast(customer_account_id as varchar), '')"
-            : "coalesce(customer_account_id, '')";
+        return match ($driver) {
+            'pgsql' => "coalesce(cast(customer_account_id as varchar), '')",
+            'sqlsrv' => "coalesce(cast(customer_account_id as varchar(36)), '')",
+            'mysql', 'mariadb' => "coalesce(cast(customer_account_id as char(36)), '')",
+            default => "coalesce(customer_account_id, '')",
+        };
     }
 
     /**
@@ -127,12 +154,14 @@ return new class extends Migration
      *
      * The extra rows are deleted, keeping the oldest. That is not a repair
      * invented here — deleting the row is exactly what the application does to
-     * an invitation when it is accepted or cancelled, and the surviving row
-     * names the same tenant, the same person and the same destination, so
-     * nothing about the invitation is lost. What is lost is the signed link
-     * that carried a deleted row's id: an invitee holding that one sees the
-     * invitation as no longer available and needs a fresh invitation, which
-     * the application can now issue because the survivor still stands.
+     * an invitation when it is accepted or cancelled, and every row in a set
+     * names the same tenant, the same person and the same destination, so one
+     * of them stands for all of them.
+     *
+     * Rows are still being deleted, and with them the signed links carrying
+     * their ids. An invitee holding one of those sees the invitation as no
+     * longer available and needs a fresh invitation, which the application can
+     * now issue because the survivor still stands.
      */
     protected function removeDuplicatePendingInvitations(): void
     {
