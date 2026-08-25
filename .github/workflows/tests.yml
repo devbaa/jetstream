@@ -47,6 +47,203 @@ jobs:
       - name: Execute tests
         run: vendor/bin/phpunit --display-deprecations --fail-on-deprecation
 
+  # sqlite is permissive about types, so it agrees with schemas a stricter
+  # engine rejects: a UUID sits happily in an integer-affinity column there.
+  # Several defects survived on exactly that difference, so the suite runs
+  # against a real PostgreSQL as well rather than only against the driver that
+  # forgives the most.
+  postgres-tests:
+    runs-on: ubuntu-22.04
+
+    name: PHP 8.4 - Laravel 13 - PostgreSQL 16
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: jetstream_test
+          POSTGRES_USER: jetstream
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pdo_pgsql
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      # Without this the suite would fall back to sqlite and report a green
+      # PostgreSQL lane that never spoke to PostgreSQL.
+      - name: Verify the lane is actually on PostgreSQL
+        run: |
+          php -r '
+            $pdo = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=jetstream_test", "jetstream", "secret");
+            echo $pdo->query("select version()")->fetchColumn(), PHP_EOL;
+          '
+        env:
+          DB_CONNECTION: pgsql
+
+      - name: Execute tests
+        run: vendor/bin/phpunit --display-deprecations --fail-on-deprecation
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: jetstream_test
+          DB_USERNAME: jetstream
+          DB_PASSWORD: secret
+
+  # The package suite above exercises behaviour; this exercises the installer
+  # and the migrations it publishes, on a real generated application, against
+  # the engine that enforces types. Most of the schema defects this fork has
+  # had lived in that seam and were invisible on sqlite.
+  stub-tests-postgres:
+    runs-on: ubuntu-22.04
+
+    name: Test Stubs - Laravel 13 - livewire - PostgreSQL 16
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: jetstream
+          POSTGRES_USER: jetstream
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: jetstream
+      DB_USERNAME: jetstream
+      DB_PASSWORD: secret
+
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pdo_pgsql
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Create a Laravel application
+        run: composer create-project laravel/laravel:13.x-dev . --no-scripts
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: 'jetstream'
+          persist-credentials: false
+
+      - name: Point the application at PostgreSQL
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+          # The generated .env is written for sqlite; the job's DB_* variables
+          # only reach artisan if the file does not override them.
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
+          sed -i 's/^#\s*DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+          sed -i 's/^#\s*DB_PORT=.*/DB_PORT=5432/' .env
+          sed -i 's/^#\s*DB_DATABASE=.*/DB_DATABASE=jetstream/' .env
+          sed -i 's/^#\s*DB_USERNAME=.*/DB_USERNAME=jetstream/' .env
+          sed -i 's/^#\s*DB_PASSWORD=.*/DB_PASSWORD=secret/' .env
+
+          grep '^DB_' .env
+
+          php artisan db:show --json | head -c 400
+
+      - name: Require the checked out package
+        run: |
+          composer config repositories.jetstream '{"type": "path", "url": "jetstream", "options": {"symlink": false}}' --file composer.json
+          composer require devbaa/jetstream:@dev --prefer-dist --no-interaction --no-progress -W
+
+      - name: Install Jetstream
+        run: php artisan jetstream:install livewire --api --verification
+
+      - name: Migrate and seed the generated application
+        run: php artisan migrate --seed --force
+
+      # Every column below was a defect that sqlite accepted. Asserting the
+      # types PostgreSQL actually gave them is the point of this lane.
+      - name: The schema is the one this package expects
+        run: |
+          php artisan tinker --execute='
+            $expected = [
+              ["users", "id", "uuid"],
+              ["users", "current_team_id", "uuid"],
+              ["sessions", "user_id", "uuid"],
+              ["audit_logs", "auditable_id", "character varying"],
+              ["personal_access_tokens", "tokenable_id", "character varying"],
+            ];
+
+            $failed = false;
+
+            foreach ($expected as [$table, $column, $type]) {
+              $found = null;
+
+              foreach (Illuminate\Support\Facades\Schema::getColumns($table) as $candidate) {
+                if ($candidate["name"] === $column) { $found = $candidate["type"]; }
+              }
+
+              $ok = $found !== null && str_starts_with($found, $type);
+
+              echo ($ok ? "ok   " : "FAIL ").$table.".".$column." => ".var_export($found, true).PHP_EOL;
+
+              $failed = $failed || ! $ok;
+            }
+
+            if ($failed) { exit(1); }
+          '
+
+      # And prove the schema is usable, not merely shaped right.
+      - name: A user can be created, audited and issued a token
+        run: |
+          php artisan tinker --execute='
+            $user = App\Models\User::factory()->create();
+
+            $token = $user->createToken("ci");
+
+            if ((string) $token->accessToken->tokenable_id !== (string) $user->id) {
+              fwrite(STDERR, "The token was not stored against its owner.".PHP_EOL);
+              exit(1);
+            }
+
+            if ($user->auditLogs()->count() < 1) {
+              fwrite(STDERR, "Creating the user wrote no audit entry.".PHP_EOL);
+              exit(1);
+            }
+
+            echo "user ".$user->id." has a token and an audit trail".PHP_EOL;
+          '
+
   stub-tests:
     runs-on: ubuntu-22.04
 

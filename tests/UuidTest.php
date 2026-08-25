@@ -10,6 +10,9 @@ use App\Models\DataRequest;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\Tenant;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Laravel\Jetstream\DataRequest as DataRequestContract;
 use Laravel\Jetstream\Jetstream;
@@ -82,6 +85,31 @@ class UuidTest extends OrchestraTestCase
         $this->assertLessThan($second->id, $first->id);
     }
 
+    /**
+     * Look a user up the way an enumerating request would.
+     *
+     * The property under test is that the probe does not yield a user. How a
+     * database says so is its own business: one searches and finds nothing,
+     * another refuses to compare an integer against a UUID column at all.
+     * Both are "no user", and requiring the first spelling would be asserting
+     * sqlite's coercion rather than the invariant.
+     */
+    protected function probe(int|string $id): ?User
+    {
+        try {
+            // Wrapped in its own transaction, which nests as a savepoint. On a
+            // driver that rejects the comparison the failure otherwise leaves
+            // the surrounding transaction aborted, and every statement after
+            // it — including entirely valid ones — is refused until rollback.
+            // That is worth knowing about beyond this test: an application
+            // that looks a model up by unvalidated input inside a transaction
+            // loses the whole transaction, not just the lookup.
+            return DB::transaction(fn (): ?User => User::find($id));
+        } catch (QueryException) {
+            return null;
+        }
+    }
+
     public function test_ids_cannot_be_enumerated_by_incrementing(): void
     {
         $user = User::forceCreate([
@@ -90,9 +118,51 @@ class UuidTest extends OrchestraTestCase
             'password' => 'secret',
         ]);
 
-        // Sequential integer probes never match a UUID key.
-        $this->assertNull(User::find(1));
-        $this->assertNull(User::find('1'));
+        // Sequential integer probes never yield a user...
+        $this->assertNull($this->probe(1));
+        $this->assertNull($this->probe('1'));
+        $this->assertNull($this->probe(PHP_INT_MAX));
+
+        // ...while the real key still does.
         $this->assertNotNull(User::find($user->id));
+    }
+
+    public function test_sqlite_and_postgresql_refuse_the_probe_differently(): void
+    {
+        // Recorded rather than smoothed over, because it is visible to an
+        // application: Model::find() on attacker-supplied input answers with
+        // nothing on sqlite and raises on PostgreSQL, which is a 404 in one
+        // deployment and a 500 in the other.
+        //
+        // Only those two are named. Both are run in CI, so both are behaviour
+        // that has been observed; how MySQL coerces a string against a numeric
+        // comparison, or what SQL Server does with the same probe, has not
+        // been, and guessing at it here would be asserting a runtime claim
+        // this suite has no evidence for.
+        User::forceCreate([
+            'name' => 'Taylor Otwell',
+            'email' => 'taylor@laravel.com',
+            'password' => 'secret',
+        ]);
+
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'sqlite') {
+            $this->assertNull(User::find(1));
+
+            return;
+        }
+
+        if ($driver === 'pgsql') {
+            $this->expectException(QueryException::class);
+
+            User::find(1);
+
+            return;
+        }
+
+        $this->markTestSkipped(
+            'The incrementing probe is only characterised at runtime for sqlite and PostgreSQL.'
+        );
     }
 }
