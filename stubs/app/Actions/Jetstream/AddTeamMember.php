@@ -46,7 +46,7 @@ class AddTeamMember implements AddsTeamMembers
         Validator::make([
             'email' => $email,
             'role' => $role,
-        ], $this->rules(), [
+        ], $this->rules($team), [
             'email.exists' => __('We were unable to find a registered user with this email address.'),
         ])->after(
             $this->ensureUserIsNotAlreadyOnTeam($team, $email)
@@ -56,14 +56,17 @@ class AddTeamMember implements AddsTeamMembers
     /**
      * Get the validation rules for adding a team member.
      *
+     * A team's roles come from the tenant the team belongs to, which is not
+     * necessarily the one in context.
+     *
      * @return array<string, Rule|array|string>
      */
-    protected function rules(): array
+    protected function rules(Team $team): array
     {
         return array_filter([
             'email' => ['required', 'email', 'exists:users'],
             'role' => Jetstream::hasRoles()
-                            ? ['required', 'string', new Role]
+                            ? ['required', 'string', Role::for($team->tenant_id)]
                             : null,
         ]);
     }

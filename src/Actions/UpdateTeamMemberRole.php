@@ -28,7 +28,7 @@ class UpdateTeamMemberRole
         Validator::make([
             'role' => $role,
         ], [
-            'role' => ['required', 'string', new Role],
+            'role' => ['required', 'string', Role::for($team->tenant_id)],
         ])->validate();
 
         $team->users()->updateExistingPivot($teamMemberId, [

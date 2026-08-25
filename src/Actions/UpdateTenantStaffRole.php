@@ -28,7 +28,7 @@ class UpdateTenantStaffRole
         Validator::make([
             'role' => $role,
         ], [
-            'role' => ['required', 'string', new Role],
+            'role' => ['required', 'string', Role::for($tenant)],
         ])->validate();
 
         $tenant->users()->updateExistingPivot($staffMemberId, [
