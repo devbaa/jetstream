@@ -18,7 +18,12 @@ return new class extends Migration
             $table->foreignUuid('tenant_id')->nullable()->index();
             $table->foreignUuid('user_id')->nullable()->index();
             $table->string('event');
-            $table->nullableUuidMorphs('auditable');
+            // Not nullableUuidMorphs: the trait is offered for any Eloquent
+            // model, so this column holds one model's UUID and another's
+            // auto-incrementing integer. The type column tells them apart.
+            $table->string('auditable_type')->nullable();
+            $table->string('auditable_id')->nullable();
+            $table->index(['auditable_type', 'auditable_id']);
             $table->json('old_values')->nullable();
             $table->json('new_values')->nullable();
             $table->string('ip_address', 45)->nullable();
