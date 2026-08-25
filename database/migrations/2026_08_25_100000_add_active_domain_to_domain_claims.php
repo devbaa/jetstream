@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\Grammars\Grammar;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -68,11 +69,25 @@ return new class extends Migration
 
     /**
      * The filtered unique index, for drivers that need one spelled out.
+     *
+     * Built through the connection's own grammar rather than by hand. The
+     * Schema calls around it apply the connection's table prefix, and raw DDL
+     * naming a literal table would quietly point somewhere else on a prefixed
+     * connection — creating the index on a table that may not exist, and
+     * leaving the one that does without its invariant.
+     *
+     * The index name stays the same on every driver and prefix, so down()
+     * drops it by that name without needing to know which branch built it.
      */
-    public function filteredUniqueIndexSql(): string
+    public function filteredUniqueIndexSql(Grammar $grammar): string
     {
-        return 'create unique index ['.static::INDEX.'] on [domain_claims] ([active_domain]) '
-            .'where [active_domain] is not null';
+        return sprintf(
+            'create unique index %s on %s (%s) where %s is not null',
+            $grammar->wrap(static::INDEX),
+            $grammar->wrapTable('domain_claims'),
+            $grammar->wrap('active_domain'),
+            $grammar->wrap('active_domain'),
+        );
     }
 
     /**
@@ -104,7 +119,7 @@ return new class extends Migration
         });
 
         if ($this->usesFilteredUniqueIndex($driver)) {
-            DB::statement($this->filteredUniqueIndexSql());
+            DB::statement($this->filteredUniqueIndexSql(Schema::getConnection()->getSchemaGrammar()));
 
             return;
         }

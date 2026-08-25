@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Laravel\Jetstream\Tests;
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Grammars\SqlServerGrammar;
+use Illuminate\Database\SqlServerConnection;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 
 /**
  * The active_domain migration says the right thing to each driver.
@@ -85,25 +88,67 @@ class DomainClaimActiveDomainMigrationTest extends OrchestraTestCase
         $this->assertSame($filtered, $this->migration()->usesFilteredUniqueIndex($driver));
     }
 
+    /**
+     * A SQL Server schema grammar on a connection with the given table prefix.
+     *
+     * No server is contacted: wrapping identifiers and applying the prefix are
+     * the grammar's own work, and the PDO closure is never called.
+     */
+    protected function sqlServerGrammar(string $prefix = ''): SqlServerGrammar
+    {
+        return new SqlServerGrammar(new SqlServerConnection(
+            fn () => throw new RuntimeException('The grammar must not need a connection.'),
+            'jetstream', $prefix, []
+        ));
+    }
+
     public function test_the_filtered_index_excludes_null_rows(): void
     {
-        $sql = $this->migration()->filteredUniqueIndexSql();
+        // Asserted through the grammar rather than against a quoting style:
+        // how SQL Server identifiers are spelled is Laravel's business, and
+        // its schema grammar is what the rest of the DDL here goes through.
+        $grammar = $this->sqlServerGrammar();
+
+        $sql = $this->migration()->filteredUniqueIndexSql($grammar);
 
         $this->assertStringContainsString('create unique index', $sql);
-        $this->assertStringContainsString('[active_domain]', $sql);
+        $this->assertStringContainsString('('.$grammar->wrap('active_domain').')', $sql);
 
         // The filter is the whole point: without it the index is the plain
         // one that cannot hold more than a single inactive claim.
-        $this->assertStringContainsString('where [active_domain] is not null', $sql);
+        $this->assertStringContainsString('where '.$grammar->wrap('active_domain').' is not null', $sql);
+    }
+
+    public function test_the_filtered_index_is_built_on_the_prefixed_table(): void
+    {
+        // Everything around it goes through Schema, which applies the
+        // connection's table prefix. Raw DDL naming a literal table would
+        // point at a different table than the column was just added to.
+        $prefixed = $this->sqlServerGrammar('tenant_');
+
+        $sql = $this->migration()->filteredUniqueIndexSql($prefixed);
+
+        $this->assertStringContainsString('on '.$prefixed->wrapTable('domain_claims'), $sql);
+        $this->assertStringNotContainsString(
+            'on '.$this->sqlServerGrammar()->wrapTable('domain_claims'), $sql
+        );
     }
 
     public function test_both_spellings_of_the_index_share_one_name(): void
     {
         // down() drops the index by name and does not know which spelling
-        // up() chose, so the two must agree.
+        // up() chose, so the two must agree — on any prefix, since the name
+        // is passed explicitly to unique() rather than generated.
         $migration = $this->migration();
 
-        $this->assertStringContainsString('['.$migration::INDEX.']', $migration->filteredUniqueIndexSql());
+        foreach (['', 'tenant_'] as $prefix) {
+            $grammar = $this->sqlServerGrammar($prefix);
+
+            $this->assertStringContainsString(
+                'index '.$grammar->wrap($migration::INDEX),
+                $migration->filteredUniqueIndexSql($grammar)
+            );
+        }
 
         // And the name is the one Laravel generates for the plain index, so
         // nothing already published under the default name is orphaned.
