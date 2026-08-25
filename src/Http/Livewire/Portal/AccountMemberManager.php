@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Http\Livewire\Portal;
 
+use Illuminate\Support\Facades\Gate;
 use Laravel\Jetstream\Contracts\InvitesCustomers;
 use Laravel\Jetstream\Contracts\RemovesCustomerAccountMembers;
 use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
@@ -100,11 +101,56 @@ class AccountMemberManager extends Component
      */
     public function cancelInvitation($invitationId)
     {
+        $this->authorizeManagingInvitations();
+
         if ($invitationId !== '') {
             $this->account->customerInvitations()->whereKey($invitationId)->delete();
         }
 
         $this->account->refresh();
+    }
+
+    /**
+     * Make sure the current user may manage this account's invitations.
+     *
+     * Every other mutation on this component hands the acting user to an
+     * action that authorizes it. Cancelling wrote to the database directly and
+     * checked nothing: the button is hidden in the view, but a Livewire method
+     * is a server endpoint, and anyone who can reach the component can call it
+     * with an invitation id.
+     *
+     * The rule is the one invitation creation already uses — the account's
+     * owner, or tenant staff who may manage the tenant's customers — because
+     * withdrawing an invitation is the same authority as extending it. It is
+     * deliberately not the narrower "addMember" the view happens to guard the
+     * button with, which would leave the staff who created an invitation
+     * unable to take it back.
+     *
+     * Ownership is asked of the model directly rather than through the
+     * "addMember" ability, even though the policy this package publishes
+     * defines that ability as exactly this check. Policies are copied into the
+     * application and are the application's to change; an application that had
+     * widened "addMember" to ordinary members, while leaving its own
+     * InviteCustomer action alone, would find them able to cancel invitations
+     * they cannot create. A security rule the package is responsible for
+     * should not have half of itself delegated to a file the package cannot
+     * see.
+     *
+     * @return void
+     */
+    protected function authorizeManagingInvitations()
+    {
+        if ($this->user->ownsCustomerAccount($this->account)) {
+            return;
+        }
+
+        // The relation is queried rather than read as a property because the
+        // suite runs Eloquent with lazy loading prevented, and this is the
+        // form the rest of this component already uses.
+        abort_unless(
+            Gate::forUser($this->user)->check('manageCustomers', $this->account->tenant()->firstOrFail()),
+            403
+        );
     }
 
     /**

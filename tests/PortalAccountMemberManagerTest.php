@@ -19,6 +19,7 @@ use Laravel\Jetstream\Tenancy\TenantContext;
 use Laravel\Jetstream\Tests\Fixtures\CustomerAccountPolicy;
 use Laravel\Jetstream\Tests\Fixtures\TenantPolicy;
 use Laravel\Jetstream\Tests\Fixtures\User;
+use Laravel\Jetstream\Tests\Fixtures\WidenedCustomerAccountPolicy;
 use Livewire\Livewire;
 
 class PortalAccountMemberManagerTest extends OrchestraTestCase
@@ -149,6 +150,114 @@ class PortalAccountMemberManagerTest extends OrchestraTestCase
             ->call('cancelInvitation', $invitation->id);
 
         $this->assertNull($invitation->fresh());
+    }
+
+    public function test_an_ordinary_member_cannot_cancel_an_invitation(): void
+    {
+        // The blade hides the cancel button behind Gate::check('addMember'),
+        // which is not authorization: the Livewire method is a public server
+        // endpoint and anyone who can reach the component can call it with an
+        // invitation id.
+        Mail::fake();
+
+        [$owner, $account] = $this->createAccountWithOwner();
+
+        $this->actingAs($owner);
+
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->set('addMemberForm.email', 'mate@example.com')
+            ->call('addMember')
+            ->assertHasNoErrors();
+
+        $invitation = $account->customerInvitations()->withoutTenancy()->firstOrFail();
+
+        // A member of the account who does not own it. They can see the
+        // account; they may not manage its membership.
+        $member = $this->createMember($account, 'bystander@example.com');
+
+        $this->assertFalse(Gate::forUser($member)->check('addMember', $account));
+
+        $this->actingAs($member);
+
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->call('cancelInvitation', $invitation->id)
+            ->assertForbidden();
+
+        $this->assertTrue(
+            $account->customerInvitations()->withoutTenancy()->whereKey($invitation->id)->exists(),
+            'The invitation was cancelled by a member who may not manage membership.'
+        );
+    }
+
+    public function test_widening_the_add_member_policy_does_not_widen_cancelling(): void
+    {
+        // The check must not be spelled through the "addMember" ability. That
+        // ability is defined in a policy the application owns and may change;
+        // if it did, without also changing its InviteCustomer action, members
+        // could cancel invitations they are not allowed to create.
+        Mail::fake();
+
+        [$owner, $account] = $this->createAccountWithOwner();
+
+        $this->actingAs($owner);
+
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->set('addMemberForm.email', 'mate@example.com')
+            ->call('addMember')
+            ->assertHasNoErrors();
+
+        $invitation = $account->customerInvitations()->withoutTenancy()->firstOrFail();
+
+        $member = $this->createMember($account, 'bystander@example.com');
+
+        Gate::policy(CustomerAccount::class, WidenedCustomerAccountPolicy::class);
+
+        // The application now says this member may add members...
+        $this->assertTrue(Gate::forUser($member)->check('addMember', $account));
+
+        $this->actingAs($member);
+
+        // ...and cancelling is still refused, because it does not ask.
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->call('cancelInvitation', $invitation->id)
+            ->assertForbidden();
+
+        $this->assertTrue(
+            $account->customerInvitations()->withoutTenancy()->whereKey($invitation->id)->exists()
+        );
+    }
+
+    public function test_tenant_staff_who_may_invite_can_also_cancel(): void
+    {
+        // Whoever may create an invitation may withdraw it. Invitation
+        // creation allows the account owner or tenant staff holding
+        // "manageCustomers", so cancelling answers to the same rule rather
+        // than to the narrower one the button happens to be hidden behind.
+        Mail::fake();
+
+        [$owner, $account] = $this->createAccountWithOwner();
+
+        $this->actingAs($owner);
+
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->set('addMemberForm.email', 'mate@example.com')
+            ->call('addMember')
+            ->assertHasNoErrors();
+
+        $invitation = $account->customerInvitations()->withoutTenancy()->firstOrFail();
+
+        $tenantOwner = $account->tenant()->firstOrFail()->owner()->firstOrFail();
+
+        $this->assertTrue(Gate::forUser($tenantOwner)->check('manageCustomers', $account->tenant));
+
+        $this->actingAs($tenantOwner);
+
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->call('cancelInvitation', $invitation->id);
+
+        $this->assertFalse(
+            $account->customerInvitations()->withoutTenancy()->whereKey($invitation->id)->exists()
+        );
     }
 
     public function test_account_owners_can_remove_members(): void
