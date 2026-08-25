@@ -69,6 +69,13 @@ class InstallCommand extends Command implements PromptsForMissingInput
     protected $migrationsWereBlocked = false;
 
     /**
+     * Indicates that the migrations ran and the child process reported failure.
+     *
+     * @var bool
+     */
+    protected $migrationsFailed = false;
+
+    /**
      * Execute the console command.
      *
      * @return int|null
@@ -157,7 +164,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
         copy($stubs.'/PasswordResetTest.php', base_path('tests/Feature/PasswordResetTest.php'));
         copy($stubs.'/RegistrationTest.php', base_path('tests/Feature/RegistrationTest.php'));
 
-        return $this->migrationsWereBlocked ? 1 : 0;
+        return $this->exitStatus();
     }
 
     /**
@@ -393,14 +400,7 @@ class InstallCommand extends Command implements PromptsForMissingInput
             $this->runCommands(['npm install', 'npm run build']);
         }
 
-        $this->line('');
-        $this->runDatabaseMigrations();
-
-        if ($this->migrationsWereBlocked) {
-            $this->components->warn('Livewire scaffolding was installed, but the database was not migrated. See above.');
-        } else {
-            $this->components->info('Livewire scaffolding installed successfully.');
-        }
+        $this->finishInstallation();
 
         return true;
     }
@@ -757,12 +757,62 @@ EOF;
             return;
         }
 
-        if (confirm('New database migrations were added. Would you like to run your migrations?', true)) {
-            (new Process([$this->phpBinary(), 'artisan', 'migrate', '--force'], base_path()))
-                ->setTimeout(null)
-                ->run(function ($type, $output) {
-                    $this->output->write($output);
-                });
+        if (! confirm('New database migrations were added. Would you like to run your migrations?', true)) {
+            return;
+        }
+
+        // The child's own output has already been written through, so the
+        // reason for the failure is on screen; what is added here is that it
+        // was a failure at all, which the exit status is the only record of.
+        $status = (new Process([$this->phpBinary(), 'artisan', 'migrate', '--force'], base_path()))
+            ->setTimeout(null)
+            ->run(function ($type, $output) {
+                $this->output->write($output);
+            });
+
+        if ($status !== 0) {
+            $this->migrationsFailed = true;
+
+            $this->components->error(sprintf('The database migrations failed with exit status %d.', $status));
+
+            $this->components->warn(
+                'The output above is "artisan migrate --force" reporting why. The database may now be partially '
+                .'migrated. Jetstream has not attempted repair, rollback, or retry.'
+            );
+        }
+    }
+
+    /**
+     * The status this installation should exit with.
+     *
+     * A migration that was refused and a migration that ran and failed are
+     * different problems with the same consequence: the application has been
+     * scaffolded against a database that is not the one it expects. Neither
+     * may be reported as a successful install.
+     *
+     * @return int
+     */
+    protected function exitStatus()
+    {
+        return $this->migrationsWereBlocked || $this->migrationsFailed ? 1 : 0;
+    }
+
+    /**
+     * Run the migrations and report how the installation actually ended.
+     *
+     * @return void
+     */
+    protected function finishInstallation()
+    {
+        $this->line('');
+        $this->runDatabaseMigrations();
+
+        if ($this->migrationsWereBlocked) {
+            $this->components->warn('Livewire scaffolding was installed, but the database was not migrated. See above.');
+        } elseif ($this->migrationsFailed) {
+            $this->components->warn('Livewire scaffolding was installed, but the migrations did not complete. See above.');
+        } else {
+            $this->components->info('Livewire scaffolding installed successfully.');
         }
     }
 
