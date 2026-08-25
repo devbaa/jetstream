@@ -61,9 +61,19 @@ class Role implements Rule
     /**
      * The key of the tenant this rule checks against.
      *
-     * Without an explicit target the request's current tenant stands in, which
-     * is correct only where the two cannot differ. Every call site inside this
-     * package names its target.
+     * Without an explicit target the request's current tenant stands in. That
+     * is a legacy compatibility path and not a safe default: it is only ever
+     * consulted when tenant features are enabled — passes() answers from the
+     * static roles otherwise and never asks — which is exactly the
+     * configuration where the ambient tenant and the record being changed can
+     * disagree.
+     *
+     * It is kept because the action stubs are copied into the application at
+     * install time and are never replaced by upgrading this package, so an
+     * application published before Role::for() exists still constructs the
+     * rule with no argument. Failing closed there would turn this into a
+     * breaking upgrade. Every call site inside this package, and every newly
+     * published stub, names its target.
      *
      * @return int|string|null
      */

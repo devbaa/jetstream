@@ -13,6 +13,7 @@ use Laravel\Jetstream\Actions\UpdateTeamMemberRole;
 use Laravel\Jetstream\Actions\UpdateTenantStaffRole;
 use Laravel\Jetstream\Jetstream;
 use Laravel\Jetstream\RoleRegistry;
+use Laravel\Jetstream\Rules\Role as RoleRule;
 use Laravel\Jetstream\Tenancy\TenantContext;
 use Laravel\Jetstream\Tests\Fixtures\TeamPolicy;
 use Laravel\Jetstream\Tests\Fixtures\TenantPolicy;
@@ -110,6 +111,60 @@ class TargetTenantRoleValidationTest extends OrchestraTestCase
     protected function attach(Tenant $tenant, User $user, string $role = 'admin'): void
     {
         $tenant->users()->attach($user, ['role' => $role]);
+    }
+
+    public function test_the_no_target_form_still_follows_the_ambient_tenant(): void
+    {
+        // This pins unsafe behaviour on purpose. The action stubs are copied
+        // into the application at install time and upgrading this package
+        // never replaces them, so an application published before Role::for()
+        // existed still constructs the rule with no argument. Failing closed
+        // would break those installs on upgrade, so the old reading is kept —
+        // and pinned here so nobody later mistakes it for target-safe and
+        // leaves a call site un-migrated on the strength of it.
+        //
+        // The three stub call sites to update by hand are AddTenantStaff,
+        // AddTeamMember and InviteTeamMember.
+        [, $a, $b] = $this->twoTenants();
+
+        $this->makeCurrent($a);
+
+        $legacy = new RoleRule;
+
+        $this->assertTrue($legacy->passes('role', 'alpha-only'));
+        $this->assertFalse($legacy->passes('role', 'beta-only'));
+
+        // ...whereas the same rule given the target reads the other way round.
+        $targeted = RoleRule::for($b);
+
+        $this->assertFalse($targeted->passes('role', 'alpha-only'));
+        $this->assertTrue($targeted->passes('role', 'beta-only'));
+    }
+
+    public function test_without_tenancy_no_tenant_is_consulted_at_all(): void
+    {
+        // "Harmless in a non-tenant application" is true because the fallback
+        // is unreachable there, not because it is safe: with tenant features
+        // off, passes() answers from the statically registered roles and the
+        // tenant — ambient or explicit — is never looked at.
+        [, $a, $b] = $this->twoTenants();
+
+        $this->app['config']->set('jetstream.features', []);
+
+        Jetstream::role('static-only', 'Static Only', ['read']);
+
+        $this->makeCurrent($a);
+
+        // The static role passes for every form of the rule...
+        $this->assertTrue((new RoleRule)->passes('role', 'static-only'));
+        $this->assertTrue(RoleRule::for($b)->passes('role', 'static-only'));
+
+        // ...and the database roles of both tenants are invisible, so the
+        // target makes no difference in either direction.
+        foreach (['alpha-only', 'beta-only'] as $key) {
+            $this->assertFalse((new RoleRule)->passes('role', $key));
+            $this->assertFalse(RoleRule::for($b)->passes('role', $key));
+        }
     }
 
     public function test_a_role_of_the_target_tenant_is_accepted_while_another_is_ambient(): void

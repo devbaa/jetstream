@@ -587,6 +587,23 @@ Invoice::withoutTenancy()->get();
 
 Nothing else about the API changed: `bypass()`, `runFor()`, `withoutTenancy()` and `$tenantOptional` behave exactly as before when a tenant *is* in context.
 
+**Role validation now targets the resource being changed.** `Laravel\Jetstream\Rules\Role` used to resolve the valid role keys from the *current* tenant. Where the ambient tenant and the tenant being modified differ — a user who belongs to two tenants, acting on an explicit tenant or team — that rejected roles the target really defines and accepted roles it has never heard of, writing an unresolvable key into the membership pivot. The rule now takes its target: `Role::for($tenant)`, or `Role::for($team->tenant_id)` for a team, whose tenant may be `null` for a personal team.
+
+`new Role` still works and still reads the ambient tenant, so upgrading breaks nothing — but **the action stubs live in your application and are not replaced by upgrading this package**. If your app was installed before this change, these three copies still validate against the ambient tenant and should be updated by hand:
+
+```php
+// app/Actions/Jetstream/AddTenantStaff.php
+'role' => ['required', 'string', Role::for($tenant)],
+
+// app/Actions/Jetstream/AddTeamMember.php
+'role' => ['required', 'string', Role::for($team->tenant_id)],
+
+// app/Actions/Jetstream/InviteTeamMember.php
+'role' => ['required', 'string', Role::for($team->tenant_id)],
+```
+
+`rules()` in the first two takes the target as an argument in the new stubs; compare against `vendor/devbaa/jetstream/stubs/app/Actions/Jetstream/`. The no-argument form is a compatibility path only, and only has any effect at all when tenant features are enabled — with tenancy off the rule answers from the statically registered roles and never asks which tenant is current.
+
 This fork intentionally diverges from upstream Jetstream (Inertia removed, single install path, UUID keys, Laravel 13/PHP 8.4 floor). Treat it as a standalone starter.
 
 ---
