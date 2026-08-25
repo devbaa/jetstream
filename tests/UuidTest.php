@@ -127,26 +127,42 @@ class UuidTest extends OrchestraTestCase
         $this->assertNotNull(User::find($user->id));
     }
 
-    public function test_how_the_probe_is_refused_depends_on_the_driver(): void
+    public function test_sqlite_and_postgresql_refuse_the_probe_differently(): void
     {
         // Recorded rather than smoothed over, because it is visible to an
         // application: Model::find() on attacker-supplied input answers with
-        // nothing on sqlite and raises on a driver that enforces the column
-        // type, which is a 404 in one deployment and a 500 in the other.
+        // nothing on sqlite and raises on PostgreSQL, which is a 404 in one
+        // deployment and a 500 in the other.
+        //
+        // Only those two are named. Both are run in CI, so both are behaviour
+        // that has been observed; how MySQL coerces a string against a numeric
+        // comparison, or what SQL Server does with the same probe, has not
+        // been, and guessing at it here would be asserting a runtime claim
+        // this suite has no evidence for.
         User::forceCreate([
             'name' => 'Taylor Otwell',
             'email' => 'taylor@laravel.com',
             'password' => 'secret',
         ]);
 
-        if (in_array(Schema::getConnection()->getDriverName(), ['sqlite', 'mysql', 'mariadb'], true)) {
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'sqlite') {
             $this->assertNull(User::find(1));
 
             return;
         }
 
-        $this->expectException(QueryException::class);
+        if ($driver === 'pgsql') {
+            $this->expectException(QueryException::class);
 
-        User::find(1);
+            User::find(1);
+
+            return;
+        }
+
+        $this->markTestSkipped(
+            'The incrementing probe is only characterised at runtime for sqlite and PostgreSQL.'
+        );
     }
 }
