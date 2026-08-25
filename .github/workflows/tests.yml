@@ -244,6 +244,73 @@ jobs:
             echo "user ".$user->id." has a token and an audit trail".PHP_EOL;
           '
 
+      # NULL is distinct from NULL in a PostgreSQL unique index, so the
+      # invitation with no customer account was the one case the table never
+      # constrained. Asserted on a real install, because the rule is a
+      # generated column plus an index and both have to survive publishing.
+      #
+      # The column and the index are reported before the duplicate is tried, so
+      # a failure here says which half is missing rather than only that the
+      # outcome was wrong.
+      #
+      # exit() is called only on failure. Psy rewrites exit into a
+      # BreakException, which Laravel's tinker command catches and turns into
+      # exit code 1 whatever status was passed — so an exit(0) on the success
+      # path would fail the step no matter what the database did.
+      - name: A person cannot hold two pending invitations to the same destination
+        run: |
+          php artisan tinker --execute='
+            $failed = false;
+
+            $key = null;
+
+            foreach (Illuminate\Support\Facades\Schema::getColumns("customer_invitations") as $column) {
+              if ($column["name"] === "account_key") { $key = $column["type"]; }
+            }
+
+            echo ($key === null ? "FAIL " : "ok   ")."customer_invitations.account_key => ".var_export($key, true).PHP_EOL;
+
+            $failed = $failed || $key === null;
+
+            $unique = collect(Illuminate\Support\Facades\Schema::getIndexes("customer_invitations"))
+              ->first(fn ($index) => $index["columns"] === ["tenant_id", "account_key", "email"] && $index["unique"]);
+
+            echo ($unique === null ? "FAIL " : "ok   ")."unique index => ".var_export($unique["name"] ?? null, true).PHP_EOL;
+
+            $failed = $failed || $unique === null;
+
+            $owner = App\Models\User::factory()->create();
+
+            $tenant = (new App\Actions\Jetstream\CreateTenant)->create($owner, ["name" => "Acme"]);
+
+            $insert = function () use ($tenant) {
+              Illuminate\Support\Facades\DB::table("customer_invitations")->insert([
+                "id" => (string) Illuminate\Support\Str::uuid7(),
+                "tenant_id" => $tenant->id,
+                "customer_account_id" => null,
+                "email" => "jane@example.test",
+                "created_at" => now(),
+                "updated_at" => now(),
+              ]);
+            };
+
+            $insert();
+
+            $refused = false;
+
+            try {
+              $insert();
+            } catch (Illuminate\Database\UniqueConstraintViolationException $e) {
+              $refused = true;
+            }
+
+            echo ($refused ? "ok   " : "FAIL ")."the second invitation was refused".PHP_EOL;
+
+            $failed = $failed || ! $refused;
+
+            if ($failed) { exit(1); }
+          '
+
   stub-tests:
     runs-on: ubuntu-22.04
 

@@ -535,7 +535,7 @@ Key tables (all UUID v7 keys, all foreign keys indexed):
 | `tenant_user` | `role`, `frozen_at`, unique `(tenant_id, user_id)` |
 | `roles` | `tenant_id` (nullable = default), `key`, `permissions` (json), unique `(tenant_id, key)` |
 | `customer_accounts` | `tenant_id`, `user_id` (owner), `frozen_at`, soft deletes |
-| `customer_invitations` | `tenant_id`, `customer_account_id` (nullable), `email` |
+| `customer_invitations` | `tenant_id`, `customer_account_id` (nullable), `email`, `account_key` (generated), unique `(tenant_id, account_key, email)` |
 | `audit_logs` | `tenant_id`, `user_id`, `event`, `auditable` (uuid morph), `old_values`/`new_values`, `ip_address`, `user_agent` |
 | `data_requests` | `user_id`, `type`, `status`, `process_after`, provenance columns |
 | `domain_claims` | `user_id`, `domain`, `token` (unique), `method`, `verified_at`, `superseded_at`, unique `(domain, user_id)` |
@@ -606,6 +606,23 @@ php artisan migrate
 ```
 
 Without `--force`: the migrations you already have stay exactly as they are, and only the new file is copied in. Existing UUID history is converted in place and keeps its values, and the morph index survives.
+
+**A person can hold only one pending customer invitation per destination.** `customer_invitations` was unique over `(tenant_id, customer_account_id, email)`. `customer_account_id` is `NULL` for the commonest invitation of all — "join this tenant as a new customer" — and NULL is distinct from NULL in a unique index on PostgreSQL, MySQL and sqlite, so that case was never constrained. The only thing standing in for the rule was an `exists()` check in `InviteCustomer`, which two overlapping requests both pass before either writes. Accepting the resulting pair gave one person two customer accounts in one tenant.
+
+A generated `account_key` column now holds the customer account id, or the empty string when there is none, and the unique index spans `(tenant_id, account_key, email)`. It is generated rather than written, so it cannot drift from the account it stands for, and it replaces the old index rather than joining it. Inviting the same person to two different accounts, or in two different tenants, or again after an invitation is accepted or cancelled, is unaffected.
+
+Invitation addresses are **not** normalized by this change, so what counts as the same address is the column and index collation rather than anything the package decides. Laravel's default MySQL and MariaDB collation is case-insensitive, so `Jane@example.com` and `jane@example.com` collide there; PostgreSQL and sqlite compare them as distinct and admit both. If you need one answer on every engine, canonicalize the address before inviting — `Jetstream::normalizeEmail()` is what the recovery-email flow uses for the same reason.
+
+The migration is published under the tenant tag:
+
+```bash
+php artisan vendor:publish --tag=jetstream-tenant-migrations
+php artisan migrate
+```
+
+Without `--force`. **If your database already holds duplicate pending invitations, the migration deletes the extra rows, keeping the oldest of each set** — the index cannot be created over them, and deleting the row is what the application already does to an invitation when it is accepted or cancelled. The rows are duplicates of each other: each set names one tenant, one person and one destination, and one row of it survives to stand for all of them. What is deleted is real, though — the extra rows and the signed links carrying their ids. An invitee holding one of those links sees the invitation as no longer available and needs to be invited again. Only rows with no customer account can be affected, since the index being replaced already separated every other pair. Run `select tenant_id, email, count(*) from customer_invitations where customer_account_id is null group by 1, 2 having count(*) > 1;` first if you want to see what will be collapsed.
+
+`app/Actions/Jetstream/InviteCustomer.php` **lives in your application and is not replaced by upgrading this package**. The new stub reports a lost race as the same `inviteCustomer` validation error the pre-insert check produces, instead of letting the constraint violation surface as a 500; compare against `vendor/devbaa/jetstream/stubs/app/Actions/Jetstream/InviteCustomer.php`. Leaving your copy as it is keeps the invariant — the database is what enforces it — and only affects what a caller sees on the rare losing request.
 
 **Role validation now targets the resource being changed.** `Laravel\Jetstream\Rules\Role` used to resolve the valid role keys from the *current* tenant. Where the ambient tenant and the tenant being modified differ — a user who belongs to two tenants, acting on an explicit tenant or team — that rejected roles the target really defines and accepted roles it has never heard of, writing an unresolvable key into the membership pivot. The rule now takes its target: `Role::for($tenant)`, or `Role::for($team->tenant_id)` for a team, whose tenant may be `null` for a personal team.
 

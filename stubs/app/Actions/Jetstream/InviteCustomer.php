@@ -9,9 +9,11 @@ use App\Models\Tenant;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Laravel\Jetstream\Contracts\InvitesCustomers;
 use Laravel\Jetstream\Events\InvitingCustomer;
 use Laravel\Jetstream\Mail\CustomerInvitation;
@@ -33,10 +35,20 @@ class InviteCustomer implements InvitesCustomers
 
         InvitingCustomer::dispatch($tenant, $email, $account);
 
-        $invitation = $tenant->customerInvitations()->create([
-            'email' => $email,
-            'customer_account_id' => $account?->id,
-        ]);
+        try {
+            $invitation = $tenant->customerInvitations()->create([
+                'email' => $email,
+                'customer_account_id' => $account?->id,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // The check above cannot decide a race: another request may insert
+            // the same invitation between it and this write. The table refuses
+            // the duplicate, and losing that way means exactly what the check
+            // means, so it is reported the same way.
+            throw ValidationException::withMessages([
+                'email' => __('This email address has already been invited.'),
+            ])->errorBag('inviteCustomer');
+        }
 
         Mail::to($email)->send(new CustomerInvitation($invitation));
     }

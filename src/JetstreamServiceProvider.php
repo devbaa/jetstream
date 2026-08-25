@@ -265,6 +265,7 @@ class JetstreamServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations/2026_07_03_500000_create_customer_accounts_table.php' => database_path('migrations/2026_07_03_500000_create_customer_accounts_table.php'),
             __DIR__.'/../database/migrations/2026_07_03_600000_create_customer_account_user_table.php' => database_path('migrations/2026_07_03_600000_create_customer_account_user_table.php'),
             __DIR__.'/../database/migrations/2026_07_03_700000_create_customer_invitations_table.php' => database_path('migrations/2026_07_03_700000_create_customer_invitations_table.php'),
+            __DIR__.'/../database/migrations/2026_08_28_100000_add_account_key_to_customer_invitations.php' => database_path('migrations/2026_08_28_100000_add_account_key_to_customer_invitations.php'),
         ], 'jetstream-tenant-migrations');
 
         $this->publishes([
