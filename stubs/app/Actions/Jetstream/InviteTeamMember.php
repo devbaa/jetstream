@@ -69,7 +69,7 @@ class InviteTeamMember implements InvitesTeamMembers
                 }),
             ],
             'role' => Jetstream::hasRoles()
-                            ? ['required', 'string', new Role]
+                            ? ['required', 'string', Role::for($team->tenant_id)]
                             : null,
         ]);
     }

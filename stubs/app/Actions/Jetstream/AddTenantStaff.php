@@ -42,7 +42,7 @@ class AddTenantStaff implements AddsTenantStaff
         Validator::make([
             'email' => $email,
             'role' => $role,
-        ], $this->rules(), [
+        ], $this->rules($tenant), [
             'email.exists' => __('We were unable to find a registered user with this email address.'),
         ])->after(
             $this->ensureUserIsNotAlreadyOnTenant($tenant, $email)
@@ -52,14 +52,17 @@ class AddTenantStaff implements AddsTenantStaff
     /**
      * Get the validation rules for adding a staff member.
      *
+     * The roles a tenant offers are its own, so they are validated against
+     * the tenant being changed rather than whichever one is in context.
+     *
      * @return array<string, \Illuminate\Contracts\Validation\Rule|array|string>
      */
-    protected function rules(): array
+    protected function rules(Tenant $tenant): array
     {
         return array_filter([
             'email' => ['required', 'email', 'exists:users'],
             'role' => Jetstream::hasRoles()
-                            ? ['required', 'string', new Role]
+                            ? ['required', 'string', Role::for($tenant)]
                             : null,
         ]);
     }
