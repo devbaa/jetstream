@@ -184,6 +184,47 @@ jobs:
       - name: Migrate and seed the generated application
         run: php artisan migrate --seed --force
 
+      # install:api publishes Sanctum's migration, which types tokenable_id as
+      # an auto-incrementing integer while every user this package creates has
+      # a UUID key. sqlite stores the mismatch silently, so the shape of the
+      # column the real installer produced is what has to be asserted.
+      - name: Sanctum's token column takes this application's user keys
+        run: |
+          php -r '
+            $columns = (new PDO("sqlite:database/database.sqlite"))
+              ->query("pragma table_info(personal_access_tokens)")->fetchAll(PDO::FETCH_ASSOC);
+
+            $tokenable = null;
+
+            foreach ($columns as $column) {
+              if ($column["name"] === "tokenable_id") { $tokenable = strtoupper($column["type"]); }
+            }
+
+            if ($tokenable === null) {
+              fwrite(STDERR, "personal_access_tokens.tokenable_id is missing.\n");
+              exit(1);
+            }
+
+            if (str_contains($tokenable, "INT")) {
+              fwrite(STDERR, "tokenable_id is $tokenable; a UUID user key does not fit in it.\n");
+              exit(1);
+            }
+
+            echo "tokenable_id => $tokenable\n";
+          '
+
+          # And prove it end to end rather than by column type alone: issue a
+          # real token to a real user through Sanctum.
+          php artisan tinker --execute='
+            $user = App\Models\User::factory()->create();
+            $token = $user->createToken("ci");
+            if ((string) $token->accessToken->tokenable_id !== (string) $user->id) {
+              fwrite(STDERR, "The token was not stored against its owner.\n");
+              exit(1);
+            }
+            echo "issued a token to ".$user->id.PHP_EOL;
+          '
+
       - name: Install NPM dependencies
         run: npm i
 

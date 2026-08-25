@@ -241,6 +241,7 @@ class JetstreamServiceProvider extends ServiceProvider
 
         $this->publishes([
             __DIR__.'/../database/migrations/0001_01_01_000000_create_users_table.php' => database_path('migrations/0001_01_01_000000_create_users_table.php'),
+            __DIR__.'/../database/migrations/2026_08_27_100000_widen_sanctum_tokenable_id.php' => database_path('migrations/2026_08_27_100000_widen_sanctum_tokenable_id.php'),
         ], 'jetstream-migrations');
 
         // These use publishes() rather than publishesMigrations() on purpose.

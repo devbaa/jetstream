@@ -431,7 +431,7 @@ Both extra fields are editable on the profile form.
 
 Every entity — users, tenants, teams, roles, customer accounts, team/customer invitations, audit logs, data requests — uses **time-ordered UUID v7** primary keys (Laravel's `HasUuids`) instead of auto-incrementing integers. IDs cannot be enumerated or guessed (`/tenants/2`, `/user/123`-style probing yields nothing) while staying index-friendly. Pivot rows keep an internal auto-increment id (never exposed).
 
-> **If you enable the API feature:** publish Sanctum's migration and switch `personal_access_tokens` to `$table->uuidMorphs('tokenable')` so token ownership matches the UUID user keys.
+> **API tokens.** Sanctum's own migration types `personal_access_tokens.tokenable_id` as an auto-incrementing integer, which cannot hold a UUID user key. The installer corrects the migration it publishes, so a new application creates the right column; nothing is left for you to edit. It is a **string**, not a UUID column — `tokenable` is polymorphic, and an application is free to issue tokens to a model of its own with an integer key.
 
 ---
 
@@ -586,6 +586,15 @@ Invoice::withoutTenancy()->get();
 ```
 
 Nothing else about the API changed: `bypass()`, `runFor()`, `withoutTenancy()` and `$tenantOptional` behave exactly as before when a tenant *is* in context.
+
+**Sanctum's token column is no longer an integer.** `personal_access_tokens.tokenable_id` came from Sanctum's own migration as an auto-incrementing integer, which no UUID user key fits into: on PostgreSQL the first token an application issued was rejected outright, and sqlite stored it wrong in silence. Fresh installs now get the right column because the installer corrects the migration before it is run. An application already installed needs the widening migration published and run:
+
+```bash
+php artisan vendor:publish --tag=jetstream-migrations
+php artisan migrate
+```
+
+Again without `--force`. Existing token rows are preserved. If you previously followed the old advice in this README and changed the column to `uuidMorphs` by hand, that also works for this package's users but will reject tokens issued to any model of yours with an integer key; a string column takes both.
 
 **The audit log now stores any model's key.** `audit_logs.auditable_id` was declared with `nullableUuidMorphs`, so it held UUIDs only — while `Auditable` is documented for *any* Eloquent model, and the example in this README is an `Invoice extends Model` with a stock auto-incrementing key. On PostgreSQL, auditing such a model failed outright with `invalid input syntax for type uuid`; sqlite stored the integer without complaint, which is why it went unnoticed. The column is now a string, so it takes UUIDs, ULIDs and integers alike — `auditable_type` is what tells them apart, as it always was.
 
