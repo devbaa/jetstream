@@ -9,6 +9,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Jetstream\Jetstream;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Laravel\Jetstream\Tests\Fixtures\Invoice;
 use Laravel\Jetstream\Tests\Fixtures\User;
 
@@ -141,6 +142,36 @@ class AuditableKeyTypeTest extends OrchestraTestCase
         $invoice = Invoice::create(['reference' => 'INV-001']);
 
         $this->assertSame((string) $invoice->getKey(), (string) $invoice->auditLogs()->firstOrFail()->auditable_id);
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function indexRebuildProvider(): array
+    {
+        return [
+            // These alter the column in place and rebuild the index
+            // themselves. Their live paths are exercised by the tests above,
+            // so taking the index off first would be work for nothing.
+            'pgsql' => ['pgsql', false],
+            'sqlite' => ['sqlite', false],
+            'mysql' => ['mysql', false],
+            'mariadb' => ['mariadb', false],
+
+            // SQL Server will not alter the type of a column an index covers
+            // at all. Its one exception is widening a character column, and
+            // uniqueidentifier to nvarchar is not that, so an existing
+            // installation would be refused outright.
+            'sqlsrv' => ['sqlsrv', true],
+        ];
+    }
+
+    #[DataProvider('indexRebuildProvider')]
+    public function test_only_the_driver_that_locks_indexed_columns_rebuilds(string $driver, bool $rebuild): void
+    {
+        $migration = require __DIR__.'/../database/migrations/2026_08_26_100000_widen_auditable_id_to_any_key_type.php';
+
+        $this->assertSame($rebuild, $migration->needsIndexRebuildForTypeChange($driver));
     }
 
     public function test_the_two_key_types_do_not_collide(): void

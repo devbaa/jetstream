@@ -29,9 +29,56 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('audit_logs', function (Blueprint $table) {
-            $table->string('auditable_id')->nullable()->change();
+        $this->retypeAuditableId(function (): void {
+            Schema::table('audit_logs', function (Blueprint $table) {
+                $table->string('auditable_id')->nullable()->change();
+            });
         });
+    }
+
+    /**
+     * Whether the driver refuses to retype a column that an index covers.
+     *
+     * auditable_id is half of the morph index, and SQL Server will not alter
+     * the type of an indexed column at all — the only exception it makes is
+     * widening a character column, which uniqueidentifier to nvarchar is not.
+     * So there the index comes off, the column changes, and the index goes
+     * back on. The other drivers alter in place and rebuild the index
+     * themselves, and their live paths are covered by the tests, so none of
+     * them takes this route.
+     */
+    public function needsIndexRebuildForTypeChange(string $driver): bool
+    {
+        return $driver === 'sqlsrv';
+    }
+
+    /**
+     * Retype auditable_id, taking the morph index out of the way if need be.
+     *
+     * The index is named by its columns rather than by a literal, so Laravel
+     * regenerates whatever name it gave the index in the first place —
+     * including the table prefix when prefix_indexes is on, which a hardcoded
+     * name would get wrong.
+     */
+    protected function retypeAuditableId(Closure $change): void
+    {
+        $rebuild = $this->needsIndexRebuildForTypeChange(
+            Schema::getConnection()->getDriverName()
+        );
+
+        if ($rebuild) {
+            Schema::table('audit_logs', function (Blueprint $table) {
+                $table->dropIndex(['auditable_type', 'auditable_id']);
+            });
+        }
+
+        $change();
+
+        if ($rebuild) {
+            Schema::table('audit_logs', function (Blueprint $table) {
+                $table->index(['auditable_type', 'auditable_id']);
+            });
+        }
     }
 
     /**
@@ -71,16 +118,18 @@ return new class extends Migration
      */
     public function down(): void
     {
-        $connection = Schema::getConnection();
+        $this->retypeAuditableId(function (): void {
+            $connection = Schema::getConnection();
 
-        if ($this->needsExplicitNarrowingCast($connection->getDriverName())) {
-            DB::statement($this->narrowingSql($connection->getSchemaGrammar()));
+            if ($this->needsExplicitNarrowingCast($connection->getDriverName())) {
+                DB::statement($this->narrowingSql($connection->getSchemaGrammar()));
 
-            return;
-        }
+                return;
+            }
 
-        Schema::table('audit_logs', function (Blueprint $table) {
-            $table->uuid('auditable_id')->nullable()->change();
+            Schema::table('audit_logs', function (Blueprint $table) {
+                $table->uuid('auditable_id')->nullable()->change();
+            });
         });
     }
 };

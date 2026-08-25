@@ -587,7 +587,16 @@ Invoice::withoutTenancy()->get();
 
 Nothing else about the API changed: `bypass()`, `runFor()`, `withoutTenancy()` and `$tenantOptional` behave exactly as before when a tenant *is* in context.
 
-**The audit log now stores any model's key.** `audit_logs.auditable_id` was declared with `nullableUuidMorphs`, so it held UUIDs only — while `Auditable` is documented for *any* Eloquent model, and the example in this README is an `Invoice extends Model` with a stock auto-incrementing key. On PostgreSQL, auditing such a model failed outright with `invalid input syntax for type uuid`; sqlite stored the integer without complaint, which is why it went unnoticed. The column is now a string, so it takes UUIDs, ULIDs and integers alike — `auditable_type` is what tells them apart, as it always was. Existing UUID history is converted in place and keeps its values; the morph index is unchanged. Nothing in your code needs to change.
+**The audit log now stores any model's key.** `audit_logs.auditable_id` was declared with `nullableUuidMorphs`, so it held UUIDs only — while `Auditable` is documented for *any* Eloquent model, and the example in this README is an `Invoice extends Model` with a stock auto-incrementing key. On PostgreSQL, auditing such a model failed outright with `invalid input syntax for type uuid`; sqlite stored the integer without complaint, which is why it went unnoticed. The column is now a string, so it takes UUIDs, ULIDs and integers alike — `auditable_type` is what tells them apart, as it always was.
+
+No application code changes are required, but **the new migration does not arrive on its own**. This package does not `loadMigrationsFrom()`; migrations reach your application only by being published, and that happens during `jetstream:install`. After upgrading:
+
+```bash
+php artisan vendor:publish --tag=jetstream-compliance-migrations
+php artisan migrate
+```
+
+Without `--force`: the migrations you already have stay exactly as they are, and only the new file is copied in. Existing UUID history is converted in place and keeps its values, and the morph index survives.
 
 **Role validation now targets the resource being changed.** `Laravel\Jetstream\Rules\Role` used to resolve the valid role keys from the *current* tenant. Where the ambient tenant and the tenant being modified differ — a user who belongs to two tenants, acting on an explicit tenant or team — that rejected roles the target really defines and accepted roles it has never heard of, writing an unresolvable key into the membership pivot. The rule now takes its target: `Role::for($tenant)`, or `Role::for($team->tenant_id)` for a team, whose tenant may be `null` for a personal team.
 
