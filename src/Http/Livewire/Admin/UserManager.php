@@ -6,9 +6,9 @@ namespace Laravel\Jetstream\Http\Livewire\Admin;
 
 use Illuminate\Support\Facades\Validator;
 use Laravel\Jetstream\Actions\CreateUser;
-use Laravel\Jetstream\Events\UserBlocked;
 use Laravel\Jetstream\Events\UserUnblocked;
 use Laravel\Jetstream\Http\Livewire\Concerns\AuthorizesSystemAdmin;
+use Laravel\Jetstream\Actions\BlockUser;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
@@ -161,12 +161,7 @@ class UserManager extends Component
             return;
         }
 
-        $subject->forceFill([
-            'blocked_at' => now(),
-            'blocked_reason' => $this->blockReason !== '' ? $this->blockReason : null,
-        ])->save();
-
-        UserBlocked::dispatch($subject);
+        app(BlockUser::class)->block($subject, $this->blockReason);
 
         $this->confirmingUserBlock = false;
 

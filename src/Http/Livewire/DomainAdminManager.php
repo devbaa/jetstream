@@ -6,10 +6,10 @@ namespace Laravel\Jetstream\Http\Livewire;
 
 use Illuminate\Support\Facades\Validator;
 use Laravel\Jetstream\Actions\VerifyDomainClaim;
-use Laravel\Jetstream\Events\UserBlocked;
 use Laravel\Jetstream\Events\UserUnblocked;
 use Laravel\Jetstream\Features;
 use Laravel\Jetstream\Http\Livewire\Concerns\WithRateLimiting;
+use Laravel\Jetstream\Actions\BlockUser;
 use Laravel\Jetstream\Jetstream;
 use Livewire\Component;
 
@@ -194,12 +194,7 @@ class DomainAdminManager extends Component
         abort_unless($subject->emailDomain() === $claim->domain, 403);
         abort_unless($this->user->managesDomainUser($subject), 403);
 
-        $subject->forceFill([
-            'blocked_at' => now(),
-            'blocked_reason' => $this->blockReason !== '' ? $this->blockReason : null,
-        ])->save();
-
-        UserBlocked::dispatch($subject);
+        app(BlockUser::class)->block($subject, $this->blockReason);
 
         $claim->recordActivity($this->user, 'member:blocked', $subject, array_filter(
             ['reason' => $this->blockReason !== '' ? $this->blockReason : null],
