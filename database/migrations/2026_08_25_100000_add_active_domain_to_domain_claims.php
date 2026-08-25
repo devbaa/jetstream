@@ -10,11 +10,69 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
+     * The name the unique index carries however it is built.
+     *
+     * The same name Laravel would generate for $table->unique('active_domain'),
+     * so dropUnique() reverses either spelling of it.
+     */
+    public const INDEX = 'domain_claims_active_domain_unique';
+
+    /**
      * The condition that makes a claim the domain's admin.
      */
-    protected function expression(): string
+    public function expression(): string
     {
         return 'case when verified_at is not null and superseded_at is null then domain end';
+    }
+
+    /**
+     * How the given driver spells a generated column.
+     *
+     * Laravel's virtualAs/storedAs modifiers exist on the MySQL, PostgreSQL
+     * and sqlite grammars only. SQL Server has no such modifier at all — its
+     * generated columns are a distinct column type, and asking for storedAs
+     * there would silently drop the expression and leave a plain nullable
+     * column that is always NULL, which is a constraint over nothing.
+     *
+     * sqlite gets a virtual column because ALTER TABLE accepts no other kind
+     * there. Virtual and stored are both indexable, which is all this needs.
+     */
+    public function generatedColumnStyle(string $driver): string
+    {
+        return match ($driver) {
+            'sqlite' => 'virtual',
+            'sqlsrv' => 'computed',
+            default => 'stored',
+        };
+    }
+
+    /**
+     * Whether the driver needs the index to exclude NULL explicitly.
+     *
+     * The invariant rests on NULL not colliding with NULL: every inactive
+     * claim — unverified, superseded, historic — reads as NULL, and there are
+     * many of them per domain. PostgreSQL, MySQL and sqlite all treat NULLs as
+     * distinct in a unique index, so a plain one says exactly what is meant.
+     *
+     * SQL Server does not. It compares NULLs as equal for uniqueness, so a
+     * plain unique index there permits one NULL row in the entire table and
+     * the second superseded claim — or the second unverified one — is
+     * rejected. Worse, on an existing database that already holds history the
+     * index simply refuses to be created. A filtered index is Microsoft's
+     * documented answer for uniqueness over a nullable column.
+     */
+    public function usesFilteredUniqueIndex(string $driver): bool
+    {
+        return $driver === 'sqlsrv';
+    }
+
+    /**
+     * The filtered unique index, for drivers that need one spelled out.
+     */
+    public function filteredUniqueIndexSql(): string
+    {
+        return 'create unique index ['.static::INDEX.'] on [domain_claims] ([active_domain]) '
+            .'where [active_domain] is not null';
     }
 
     /**
@@ -23,32 +81,36 @@ return new class extends Migration
      * Active is a combination of two nullable timestamps — verified_at set,
      * superseded_at not — and no portable unique index can be built over a
      * condition. A column that holds the domain exactly while the claim is
-     * active, and NULL otherwise, can be: every supported database exempts
-     * NULL from uniqueness, so superseded and unverified claims never collide
-     * while two active claims for one domain cannot both exist.
+     * active, and NULL otherwise, can be.
      *
      * The column is generated rather than written by the application, so it
      * cannot drift from the timestamps it stands for and no writer can evade
-     * the constraint by setting them and forgetting it. Generated columns are
-     * added stored where that is allowed and virtual on sqlite, which permits
-     * only virtual ones in ALTER TABLE; both are indexable, so the invariant
-     * is the same one on every driver rather than a strong rule on PostgreSQL
-     * and nothing on sqlite.
+     * the constraint by setting them and forgetting it.
      */
     public function up(): void
     {
         $this->supersedeDuplicateActiveClaims();
 
-        $virtual = Schema::getConnection()->getDriverName() === 'sqlite';
+        $driver = Schema::getConnection()->getDriverName();
+        $style = $this->generatedColumnStyle($driver);
+        $expression = $this->expression();
 
-        Schema::table('domain_claims', function (Blueprint $table) use ($virtual) {
-            $column = $table->string('active_domain')->nullable();
-
-            $virtual ? $column->virtualAs($this->expression()) : $column->storedAs($this->expression());
+        Schema::table('domain_claims', function (Blueprint $table) use ($style, $expression) {
+            match ($style) {
+                'computed' => $table->computed('active_domain', $expression)->persisted(),
+                'virtual' => $table->string('active_domain')->nullable()->virtualAs($expression),
+                default => $table->string('active_domain')->nullable()->storedAs($expression),
+            };
         });
 
+        if ($this->usesFilteredUniqueIndex($driver)) {
+            DB::statement($this->filteredUniqueIndexSql());
+
+            return;
+        }
+
         Schema::table('domain_claims', function (Blueprint $table) {
-            $table->unique('active_domain');
+            $table->unique('active_domain', static::INDEX);
         });
     }
 
@@ -92,11 +154,15 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
+     *
+     * Both spellings of the index carry the same name, and dropping an index
+     * by name is the same statement whether or not it was filtered, so this
+     * needs no branch of its own.
      */
     public function down(): void
     {
         Schema::table('domain_claims', function (Blueprint $table) {
-            $table->dropUnique(['active_domain']);
+            $table->dropUnique(static::INDEX);
         });
 
         Schema::table('domain_claims', function (Blueprint $table) {

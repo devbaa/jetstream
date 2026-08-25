@@ -56,6 +56,7 @@ class VerifyDomainClaim
             // other's rows.
             $claims = Jetstream::newDomainClaimModel()->newQuery()
                 ->where('domain', $claim->domain)
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
 
