@@ -249,6 +249,48 @@ class InstallCommand extends Command implements PromptsForMissingInput
     }
 
     /**
+     * Type Sanctum's tokenable_id for the keys this package's users have.
+     *
+     * "install:api" publishes Sanctum's own migration, which types
+     * tokenable_id with morphs() — an auto-incrementing integer — while every
+     * user this package creates has a UUID key. Left alone, the first token
+     * the application issues is rejected on any database that enforces the
+     * type. sqlite does not: its dynamic typing keeps the UUID as text in an
+     * integer-affinity column, so the mismatch is invisible there rather than
+     * damaging.
+     *
+     * It is rewritten here rather than only altered afterwards because the
+     * file Sanctum publishes is stamped with the current date-time, so a
+     * migration shipped by this package cannot be relied on to sort after it.
+     * Corrected at the source, a new application creates the right column
+     * once instead of building the wrong one and changing it.
+     *
+     * A string rather than a UUID: tokenable is polymorphic, and an
+     * application may well issue tokens to a model of its own with an integer
+     * key. The type column is what tells them apart.
+     *
+     * @return void
+     */
+    protected function correctSanctumTokenableColumn()
+    {
+        foreach ((array) glob(database_path('migrations/*_create_personal_access_tokens_table.php')) as $path) {
+            if (! is_string($path)) {
+                continue;
+            }
+
+            $this->replaceInFile(
+                '$table->morphs(\'tokenable\');',
+                implode(PHP_EOL.'            ', [
+                    '$table->string(\'tokenable_type\');',
+                    '$table->string(\'tokenable_id\');',
+                    '$table->index([\'tokenable_type\', \'tokenable_id\']);',
+                ]),
+                $path
+            );
+        }
+    }
+
+    /**
      * Configure the session driver for Jetstream.
      *
      * @return void
@@ -274,6 +316,8 @@ class InstallCommand extends Command implements PromptsForMissingInput
         $this->call('install:api', [
             '--without-migration-prompt' => true,
         ]);
+
+        $this->correctSanctumTokenableColumn();
 
         // NPM Packages...
         $this->updateNodePackages(function ($packages) {

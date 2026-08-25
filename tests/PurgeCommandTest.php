@@ -37,7 +37,9 @@ class PurgeCommandTest extends OrchestraTestCase
         if (! Schema::hasTable('personal_access_tokens')) {
             Schema::create('personal_access_tokens', function ($table) {
                 $table->id();
-                $table->foreignId('tokenable_id');
+                // A string, as the package's migration leaves it: tokenable is
+                // polymorphic and this application's users have UUID keys.
+                $table->string('tokenable_id');
                 $table->string('tokenable_type');
             });
         }
