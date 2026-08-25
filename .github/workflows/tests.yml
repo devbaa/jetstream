@@ -244,6 +244,41 @@ jobs:
             echo "user ".$user->id." has a token and an audit trail".PHP_EOL;
           '
 
+      # NULL is distinct from NULL in a PostgreSQL unique index, so the
+      # invitation with no customer account was the one case the table never
+      # constrained. Asserted on a real install, because the rule is a
+      # generated column plus an index and both have to survive publishing.
+      - name: A person cannot hold two pending invitations to the same destination
+        run: |
+          php artisan tinker --execute='
+            $owner = App\Models\User::factory()->create();
+
+            $tenant = (new App\Actions\Jetstream\CreateTenant)->create($owner, ["name" => "Acme"]);
+
+            $insert = function () use ($tenant) {
+              Illuminate\Support\Facades\DB::table("customer_invitations")->insert([
+                "id" => (string) Illuminate\Support\Str::uuid7(),
+                "tenant_id" => $tenant->id,
+                "customer_account_id" => null,
+                "email" => "jane@example.test",
+                "created_at" => now(),
+                "updated_at" => now(),
+              ]);
+            };
+
+            $insert();
+
+            try {
+              $insert();
+            } catch (Illuminate\Database\UniqueConstraintViolationException $e) {
+              echo "the second invitation was refused".PHP_EOL;
+              exit(0);
+            }
+
+            fwrite(STDERR, "PostgreSQL accepted two pending invitations for the same person.".PHP_EOL);
+            exit(1);
+          '
+
   stub-tests:
     runs-on: ubuntu-22.04
 
