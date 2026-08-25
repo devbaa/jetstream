@@ -19,6 +19,7 @@ use Laravel\Jetstream\Tenancy\TenantContext;
 use Laravel\Jetstream\Tests\Fixtures\CustomerAccountPolicy;
 use Laravel\Jetstream\Tests\Fixtures\TenantPolicy;
 use Laravel\Jetstream\Tests\Fixtures\User;
+use Laravel\Jetstream\Tests\Fixtures\WidenedCustomerAccountPolicy;
 use Livewire\Livewire;
 
 class PortalAccountMemberManagerTest extends OrchestraTestCase
@@ -185,6 +186,44 @@ class PortalAccountMemberManagerTest extends OrchestraTestCase
         $this->assertTrue(
             $account->customerInvitations()->withoutTenancy()->whereKey($invitation->id)->exists(),
             'The invitation was cancelled by a member who may not manage membership.'
+        );
+    }
+
+    public function test_widening_the_add_member_policy_does_not_widen_cancelling(): void
+    {
+        // The check must not be spelled through the "addMember" ability. That
+        // ability is defined in a policy the application owns and may change;
+        // if it did, without also changing its InviteCustomer action, members
+        // could cancel invitations they are not allowed to create.
+        Mail::fake();
+
+        [$owner, $account] = $this->createAccountWithOwner();
+
+        $this->actingAs($owner);
+
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->set('addMemberForm.email', 'mate@example.com')
+            ->call('addMember')
+            ->assertHasNoErrors();
+
+        $invitation = $account->customerInvitations()->withoutTenancy()->firstOrFail();
+
+        $member = $this->createMember($account, 'bystander@example.com');
+
+        Gate::policy(CustomerAccount::class, WidenedCustomerAccountPolicy::class);
+
+        // The application now says this member may add members...
+        $this->assertTrue(Gate::forUser($member)->check('addMember', $account));
+
+        $this->actingAs($member);
+
+        // ...and cancelling is still refused, because it does not ask.
+        Livewire::test(AccountMemberManager::class, ['account' => $account])
+            ->call('cancelInvitation', $invitation->id)
+            ->assertForbidden();
+
+        $this->assertTrue(
+            $account->customerInvitations()->withoutTenancy()->whereKey($invitation->id)->exists()
         );
     }
 

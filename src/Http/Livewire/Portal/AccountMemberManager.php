@@ -126,17 +126,31 @@ class AccountMemberManager extends Component
      * button with, which would leave the staff who created an invitation
      * unable to take it back.
      *
+     * Ownership is asked of the model directly rather than through the
+     * "addMember" ability, even though the policy this package publishes
+     * defines that ability as exactly this check. Policies are copied into the
+     * application and are the application's to change; an application that had
+     * widened "addMember" to ordinary members, while leaving its own
+     * InviteCustomer action alone, would find them able to cancel invitations
+     * they cannot create. A security rule the package is responsible for
+     * should not have half of itself delegated to a file the package cannot
+     * see.
+     *
      * @return void
      */
     protected function authorizeManagingInvitations()
     {
-        $gate = Gate::forUser($this->user);
-
-        if ($gate->check('addMember', $this->account)) {
+        if ($this->user->ownsCustomerAccount($this->account)) {
             return;
         }
 
-        abort_unless($gate->check('manageCustomers', $this->account->tenant()->firstOrFail()), 403);
+        // The relation is queried rather than read as a property because the
+        // suite runs Eloquent with lazy loading prevented, and this is the
+        // form the rest of this component already uses.
+        abort_unless(
+            Gate::forUser($this->user)->check('manageCustomers', $this->account->tenant()->firstOrFail()),
+            403
+        );
     }
 
     /**
