@@ -23,6 +23,7 @@ use Illuminate\Support\Str;
  * @property string $domain
  * @property string $token
  * @property string|null $method
+ * @property string|null $active_domain
  * @property \Illuminate\Support\Carbon|null $verified_at
  * @property \Illuminate\Support\Carbon|null $superseded_at
  * @property \Illuminate\Support\Carbon|null $created_at

@@ -46,12 +46,35 @@ class VerifyDomainClaim
     public function activate(DomainClaim $claim, string $method): void
     {
         $superseded = DB::transaction(function () use ($claim, $method) {
-            $superseded = Jetstream::newDomainClaimModel()->newQuery()
+            // Every claim for the domain is locked, not just the active ones.
+            // Locking the active ones was the same thing as locking nothing
+            // whenever the domain had no admin yet, so two people verifying an
+            // unclaimed domain at the same moment each found no one to
+            // supersede and both took the flag. The claim being activated is
+            // itself a row of this domain, so the set is never empty, and two
+            // activations racing for one domain always contend over each
+            // other's rows.
+            $claims = Jetstream::newDomainClaimModel()->newQuery()
                 ->where('domain', $claim->domain)
-                ->whereKeyNot($claim->getKey())
-                ->active()
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
+
+            // Act on the row that was locked, not on the copy the caller
+            // happened to be holding. A claim that has been superseded since
+            // that copy was loaded still reads as active in memory, and
+            // Eloquent writes only what changed, so clearing superseded_at
+            // would be skipped as "already null" and re-verification would
+            // quietly fail to take the flag back.
+            $locked = $claims->first(fn (DomainClaim $other): bool => $other->is($claim));
+
+            if ($locked instanceof DomainClaim) {
+                $claim->setRawAttributes($locked->getAttributes(), true);
+            }
+
+            $superseded = $claims->filter(
+                fn (DomainClaim $other): bool => ! $other->is($claim) && $other->isActive()
+            )->values();
 
             foreach ($superseded as $previous) {
                 $previous->forceFill(['superseded_at' => now()])->save();
