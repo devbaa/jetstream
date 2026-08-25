@@ -42,12 +42,16 @@ return new class extends Migration
      * account key can ever collide with it.
      *
      * What "none" coalesces to is a string, so the account it stands beside
-     * has to be one too — and foreignUuid() is only character data on some of
-     * these drivers. It compiles to a native uuid on PostgreSQL and to
-     * uniqueidentifier on SQL Server. On MariaDB it is char(36) or a native
-     * uuid depending on the server: since 10.7 Laravel's MariaDbGrammar asks
-     * the version and picks uuid. Only sqlite is character data whatever the
-     * server.
+     * has to be one too — and what foreignUuid() compiles to differs by
+     * driver. It is a native uuid on PostgreSQL and a uniqueidentifier on SQL
+     * Server, neither of which is character data. MySQL gives it char(36),
+     * which is; MariaDB gives it char(36) or a native uuid depending on the
+     * server, because Laravel's MariaDbGrammar asks the version and picks uuid
+     * from 10.7.
+     *
+     * sqlite is the only driver deliberately left uncast. Every other one
+     * converts explicitly, so that the expression does not depend on how the
+     * server at hand happens to represent a UUID.
      *
      * Where the column is not a string the cast is not optional, and the two
      * engines that can be checked here refuse it in different ways.
@@ -59,9 +63,10 @@ return new class extends Migration
      * fails on the empty string, which is the one case this column exists to
      * represent.
      *
-     * MySQL and MariaDB are cast for the same reason, with no server here to
-     * confirm it. The alternative is an expression whose correctness depends
-     * on which MariaDB version the application happens to be running.
+     * MySQL is cast even though char(36) would coalesce with a string as it
+     * stands, and MariaDB with no server here to say which type it would get.
+     * The alternative is an expression whose correctness depends on which
+     * MariaDB version the application happens to be running.
      *
      * The spellings differ because the engines do. char(36) is the portable
      * CAST spelling across the MySQL and MariaDB versions this package

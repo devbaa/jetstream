@@ -132,8 +132,7 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
             'mysql' => ['mysql', "coalesce(cast(customer_account_id as char(36)), '')"],
             'mariadb' => ['mariadb', "coalesce(cast(customer_account_id as char(36)), '')"],
 
-            // The one driver where a uuid column is character data whatever
-            // the server, so there is nothing to convert.
+            // The one driver deliberately left uncast.
             'sqlite' => ['sqlite', "coalesce(customer_account_id, '')"],
         ];
     }
@@ -144,7 +143,7 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
         $this->assertSame($expression, $this->migration()->expression($driver));
     }
 
-    public function test_only_sqlite_is_trusted_to_hold_the_account_as_a_string(): void
+    public function test_sqlite_is_the_only_driver_deliberately_left_uncast(): void
     {
         // sqlite is the only driver deliberately left uncast; every other one
         // converts. That is the strategy, not an inference from column types:
