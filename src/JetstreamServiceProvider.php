@@ -280,6 +280,7 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../database/migrations/2026_07_07_100000_create_domain_claims_table.php' => database_path('migrations/2026_07_07_100000_create_domain_claims_table.php'),
             __DIR__.'/../database/migrations/2026_07_07_200000_create_domain_activities_table.php' => database_path('migrations/2026_07_07_200000_create_domain_activities_table.php'),
+            __DIR__.'/../database/migrations/2026_08_25_100000_add_active_domain_to_domain_claims.php' => database_path('migrations/2026_08_25_100000_add_active_domain_to_domain_claims.php'),
         ], 'jetstream-domain-migrations');
 
         $this->publishes([
