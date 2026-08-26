@@ -8,6 +8,7 @@ use App\Actions\Jetstream\CreateCustomerAccount;
 use App\Actions\Jetstream\CreateTenant;
 use App\Models\CustomerAccount;
 use App\Models\Tenant;
+use Illuminate\Database\DatabaseTransactionsManager;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -91,6 +92,17 @@ class CustomerInvitationAcceptRaceTest extends OrchestraTestCase
         // connection, which a second connection cannot see. These tests commit
         // their own fixtures and clean up after themselves instead.
         DB::rollBack();
+
+        // And with it, the transactions manager the harness installs. That one
+        // discounts one pending transaction per transacting connection, so
+        // that after-commit callbacks still fire inside the wrapping
+        // transaction a test never commits. These tests gave that wrapper up a
+        // line ago and open real transactions of their own, so they need the
+        // manager an application actually runs with — otherwise "after commit"
+        // would be answered here by the harness rather than by the code.
+        $this->app->instance('db.transactions', $transactions = new DatabaseTransactionsManager);
+
+        DB::connection()->setTransactionManager($transactions);
 
         $this->wipe();
     }
@@ -465,6 +477,85 @@ class CustomerInvitationAcceptRaceTest extends OrchestraTestCase
         $this->assertSame(1, DB::table('customer_account_user')->count());
         $this->assertSame(0, DB::table('customer_invitations')->count());
         $this->assertSame(1, $this->accountCount());
+    }
+
+    /**
+     * Record, for each announcement, whether the account was visible from the
+     * second connection at the moment it was made.
+     *
+     * @param  list<bool>  $announced
+     */
+    protected function recordAnnouncements(array &$announced): void
+    {
+        Event::listen(function (CustomerInvitationAccepted $event) use (&$announced): void {
+            $announced[] = DB::connection(static::OTHER)
+                ->table('customer_accounts')
+                ->where('id', $event->account->getKey())
+                ->exists();
+        });
+    }
+
+    public function test_the_acceptance_waits_for_the_outermost_transaction_to_commit(): void
+    {
+        // Accepting inside a transaction someone else opened — transaction
+        // middleware, a larger workflow, a job that wraps its work. The
+        // controller's own transaction is a savepoint there, and its commit
+        // settles nothing: the account is still invisible to everyone else,
+        // and the outer transaction could still take it away.
+        [, $invitee, $id] = $this->invitation();
+
+        $announced = [];
+
+        $this->recordAnnouncements($announced);
+
+        DB::beginTransaction();
+
+        try {
+            $this->actingAs($invitee)->get($this->link($id));
+
+            $this->assertSame([], $announced, 'The acceptance was announced while an outer transaction was still open.');
+
+            $this->assertFalse(
+                DB::connection(static::OTHER)->table('customer_accounts')->exists(),
+                'The account was visible elsewhere before the outermost transaction committed.'
+            );
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            throw $e;
+        }
+
+        $this->assertSame(
+            [true],
+            $announced,
+            'The acceptance was not announced once the outermost transaction committed, or was announced too early to see.'
+        );
+    }
+
+    public function test_an_acceptance_undone_by_the_outermost_transaction_is_never_announced(): void
+    {
+        // The other half, and the worse one: the outer transaction rolls back
+        // and the acceptance never happened. Anything already told about it
+        // would be acting on an account, a membership and a switched context
+        // that no longer exist.
+        [, $invitee, $id] = $this->invitation();
+
+        $announced = [];
+
+        $this->recordAnnouncements($announced);
+
+        DB::beginTransaction();
+
+        $this->actingAs($invitee)->get($this->link($id));
+
+        DB::rollBack();
+
+        $this->assertSame([], $announced, 'An acceptance that was rolled back was announced anyway.');
+
+        $this->assertSame(0, $this->accountCount());
+        $this->assertSame(1, DB::table('customer_invitations')->count(), 'The invitation was consumed by a transaction that rolled back.');
     }
 
     public function test_the_acceptance_is_not_announced_when_it_does_not_happen(): void
