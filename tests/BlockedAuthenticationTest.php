@@ -7,7 +7,9 @@ namespace Laravel\Jetstream\Tests;
 use App\Models\User as AppUser;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Laravel\Fortify\Features as FortifyFeatures;
+use Laravel\Fortify\Fortify;
 use Laravel\Passkeys\Actions\VerifyPasskey;
 use Laravel\Passkeys\Http\Controllers\PasskeyLoginController;
 use Laravel\Passkeys\Passkey;
@@ -230,7 +232,7 @@ class BlockedAuthenticationTest extends OrchestraTestCase
 
         $passkey->setRelation('user', $user);
 
-        $verify = $this->createMock(VerifyPasskey::class);
+        $verify = $this->createStub(VerifyPasskey::class);
 
         $verify->method('__invoke')->willReturn($passkey);
 
@@ -252,6 +254,119 @@ class BlockedAuthenticationTest extends OrchestraTestCase
         );
 
         $this->assertTrue($refused, 'The passkey login was not refused.');
+    }
+
+    public function test_a_refused_attempt_records_neither_a_login_nor_a_logout(): void
+    {
+        // Taking the state back is not the same as signing out, and must not
+        // be recorded as one: an auth.logout for a session that was never
+        // allowed to begin is as false as the auth.login would have been.
+        $user = $this->createUser(blocked: true);
+
+        $this->post('/login', ['email' => $user->email, 'password' => 'secret']);
+
+        $this->assertFalse($this->recorded('auth.login'), 'A refused attempt was recorded as a sign-in.');
+        $this->assertFalse($this->recorded('auth.logout'), 'A refused attempt was recorded as a sign-out.');
+    }
+
+    public function test_the_blocking_listener_runs_before_the_audit_subscriber(): void
+    {
+        // Both listen to Login, Laravel calls listeners in registration order,
+        // and the refusal throws — so the order is what decides whether the
+        // audit trail gains a record of a sign-in this package then rejects.
+        // Pinned as an ordering fact rather than left to the outcome above,
+        // which would still pass if the two were merely swapped and the audit
+        // happened to fail for some other reason.
+        $listeners = Event::getListeners(\Illuminate\Auth\Events\Login::class);
+
+        $this->assertGreaterThan(1, count($listeners), 'Nothing but the blocker is listening to Login.');
+
+        $blocker = null;
+        $auditor = null;
+
+        foreach (array_values($listeners) as $position => $listener) {
+            $description = $this->describe($listener);
+
+            if ($blocker === null && str_contains($description, 'BlockedUsers')) {
+                $blocker = $position;
+            }
+
+            if ($auditor === null && str_contains($description, 'AuthenticationEventSubscriber')) {
+                $auditor = $position;
+            }
+        }
+
+        $this->assertNotNull($blocker, 'The blocking listener is not registered on Login.');
+        $this->assertNotNull($auditor, 'The audit subscriber is not registered on Login.');
+
+        $this->assertLessThan($auditor, $blocker, 'The audit subscriber would record a blocked login before it is refused.');
+    }
+
+    /**
+     * A printable description of a registered listener.
+     */
+    protected function describe(mixed $listener): string
+    {
+        if (is_string($listener)) {
+            return $listener;
+        }
+
+        if (! $listener instanceof \Closure) {
+            return get_debug_type($listener);
+        }
+
+        $bound = (new \ReflectionFunction($listener))->getStaticVariables();
+
+        return json_encode(array_map(
+            fn (mixed $value): string => is_array($value)
+                ? implode('@', array_map(fn (mixed $part): string => is_string($part) ? $part : get_debug_type($part), $value))
+                : (is_string($value) ? $value : get_debug_type($value)),
+            $bound
+        )) ?: '';
+    }
+
+    public function test_an_application_authenticate_using_callback_still_runs(): void
+    {
+        // The reason this is built on Laravel's authentication lifecycle and
+        // not on Fortify::authenticateUsing(): that callback is a single slot
+        // the application owns. Taking it would mean replacing an
+        // application's authentication rather than composing with it.
+        $user = $this->createUser();
+
+        $called = false;
+
+        Fortify::authenticateUsing(function ($request) use ($user, &$called) {
+            $called = true;
+
+            return $request->input('email') === $user->email ? $user : null;
+        });
+
+        try {
+            $this->post('/login', ['email' => $user->email, 'password' => 'anything-at-all']);
+
+            $this->assertTrue($called, 'The application callback was not consulted.');
+            $this->assertTrue(Auth::check(), 'The application callback authenticated nobody.');
+        } finally {
+            Fortify::$authenticateUsingCallback = null;
+        }
+    }
+
+    public function test_an_application_callback_does_not_let_a_blocked_user_through(): void
+    {
+        // And the other half: composing means the application still decides
+        // whether the credentials are good, while this package still decides
+        // whether that user may come in.
+        $user = $this->createUser(blocked: true);
+
+        Fortify::authenticateUsing(fn () => $user);
+
+        try {
+            $this->post('/login', ['email' => $user->email, 'password' => 'anything-at-all']);
+
+            $this->assertFalse(Auth::check(), 'A blocked user was admitted by an application callback.');
+        } finally {
+            Fortify::$authenticateUsingCallback = null;
+        }
     }
 
     public function test_an_unblocked_user_still_signs_in_normally(): void

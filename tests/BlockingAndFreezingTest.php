@@ -51,11 +51,18 @@ class BlockingAndFreezingTest extends OrchestraTestCase
 
     public function test_blocked_users_are_logged_out_and_turned_away(): void
     {
+        // Blocked after the session exists, not before. Setting a blocked user
+        // as the acting one is itself refused now — the boundary is at
+        // authentication rather than at the route — so a test that starts from
+        // "already blocked and already signed in" is describing a state that
+        // can no longer be reached.
         $user = $this->createUser();
+
+        $this->actingAs($user);
 
         $user->forceFill(['blocked_at' => now(), 'blocked_reason' => 'Abuse'])->save();
 
-        $this->actingAs($user);
+        $this->app['auth']->forgetGuards();
 
         $response = $this->get('/blocked-probe');
 
