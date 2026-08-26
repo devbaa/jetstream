@@ -27,11 +27,12 @@ use Livewire\Livewire;
 /**
  * A role update names a membership, and only a real one can be changed.
  *
- * Both actions took an id and handed it to updateExistingPivot(), which builds
- * an UPDATE constrained to the relation and the given key. Where no such
- * membership exists the statement matches nothing, affects nothing and reports
- * no error — and the action went on to announce TenantStaffUpdated or
- * TeamMemberUpdated for it anyway.
+ * Both actions took an id and handed it to updateExistingPivot(), which writes
+ * nothing when there is no such membership and reports no error — and the
+ * action went on to announce TenantStaffUpdated or TeamMemberUpdated for it
+ * anyway. Its return value could not have been consulted instead: for these
+ * relations it reports the same thing for a membership that does not exist as
+ * for one that already holds the role being set.
  *
  * Two things follow. The caller is told the change succeeded when the database
  * was never touched, and anything listening — an audit trail, a notification,
@@ -289,17 +290,51 @@ class RoleUpdateMembershipTest extends OrchestraTestCase
         $this->assertNull($this->tenantRole($tenant, $stranger));
     }
 
+    public function test_the_update_result_cannot_tell_absence_from_no_change(): void
+    {
+        // Why membership is established separately instead of read back off
+        // the write. These relations name a pivot model, so Laravel calls
+        // using() for them and updateExistingPivot() takes its custom-class
+        // path: it loads the pivot, fills it, and reports whether anything
+        // became dirty. A membership that does not exist reports nothing, and
+        // so does one that already holds the role being set. The two are
+        // indistinguishable — not on one driver or another, but by
+        // construction.
+        //
+        // Nothing here goes through the action; this is the framework
+        // behaviour the fix is shaped around.
+        [, $tenant] = $this->tenantWithRoles();
+
+        $stranger = $this->createUser('stranger@example.test');
+
+        $staff = $this->createUser('staff@acme.test');
+
+        $tenant->users()->attach($staff, ['role' => 'editor']);
+
+        $absent = $tenant->users()->updateExistingPivot($stranger->getKey(), ['role' => 'editor']);
+        $unchanged = $tenant->users()->updateExistingPivot($staff->getKey(), ['role' => 'editor']);
+
+        $this->assertFalse((bool) $absent, 'Updating a membership that does not exist reported a change.');
+        $this->assertFalse((bool) $unchanged, 'Setting the role a member already holds reported a change.');
+
+        // And a real change does report one, so the value is not simply
+        // useless — it just cannot answer the question being asked of it.
+        $this->assertTrue(
+            (bool) $tenant->users()->updateExistingPivot($staff->getKey(), ['role' => 'admin']),
+            'A real role change reported nothing.'
+        );
+    }
+
     public function test_setting_the_role_a_member_already_has_still_succeeds(): void
     {
         // Decided rather than inherited. The membership exists and ends in the
         // state that was asked for, so the update succeeds and is announced —
         // even though nothing about the row changed.
         //
-        // The alternative, deciding from the number of rows the UPDATE
-        // reported, cannot be made to mean the same thing everywhere: MySQL
-        // counts rows it changed and PostgreSQL counts rows it matched, so the
-        // same no-op update would be announced on one and swallowed on the
-        // other. Whether a membership exists is a question with one answer.
+        // The alternative, taking the result of the write as the answer,
+        // cannot decide it at all: as the test above shows, a membership that
+        // does not exist and one that already holds the role report the same
+        // thing. Whether a membership exists has to be asked separately.
         [$owner, $tenant] = $this->tenantWithRoles();
 
         $staff = $this->createUser('staff@acme.test');

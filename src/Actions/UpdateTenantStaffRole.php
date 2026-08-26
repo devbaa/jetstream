@@ -16,13 +16,18 @@ class UpdateTenantStaffRole
     /**
      * Update the role for the given tenant staff member.
      *
-     * The membership is looked up and held before it is written, rather than
-     * left to the UPDATE. updateExistingPivot() builds a statement constrained
-     * to the relation and the given key; where no such membership exists it
-     * matches nothing, affects nothing and reports no error, so the caller was
-     * told the change succeeded and TenantStaffUpdated was announced for a
-     * role that does not exist. A user who is staff of some other tenant looks
-     * exactly the same from here as one who is staff nowhere at all.
+     * The membership is established before it is written, rather than left to
+     * the write. updateExistingPivot() writes nothing when there is no such
+     * membership and reports no error, so the caller was told the change
+     * succeeded and TenantStaffUpdated was announced for a role that does not
+     * exist. A user who is staff of some other tenant looks exactly the same
+     * from here as one who is staff nowhere at all.
+     *
+     * Its return value cannot stand in for the check either. These relations
+     * name a pivot model, so Laravel calls using() for them and the update
+     * takes its custom-class path: load the pivot, fill it, report whether
+     * anything became dirty. A membership that does not exist and one that
+     * already holds the role being set report the same thing.
      *
      * Reading it first would only narrow the window, so the row is taken with
      * lockForUpdate() and the write happens in the same transaction: a
