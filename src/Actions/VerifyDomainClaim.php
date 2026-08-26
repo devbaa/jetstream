@@ -45,7 +45,7 @@ class VerifyDomainClaim
      */
     public function activate(DomainClaim $claim, string $method): void
     {
-        $superseded = DB::transaction(function () use ($claim, $method) {
+        DB::transaction(function () use ($claim, $method) {
             // Every claim for the domain is locked, not just the active ones.
             // Locking the active ones was the same thing as locking nothing
             // whenever the domain had no admin yet, so two people verifying an
@@ -88,14 +88,15 @@ class VerifyDomainClaim
 
             $claim->recordActivity($claim->user, 'domain:verified', null, ['method' => $method]);
 
-            return $superseded;
+            // Raised inside the transaction so the deferred events are carried
+            // by this one rather than by whatever else is open; both say when
+            // their listeners may run.
+            foreach ($superseded as $previous) {
+                DomainClaimSuperseded::dispatch($previous);
+            }
+
+            DomainClaimVerified::dispatch($claim);
         });
-
-        foreach ($superseded as $previous) {
-            DomainClaimSuperseded::dispatch($previous);
-        }
-
-        DomainClaimVerified::dispatch($claim);
 
         app(AddUserToDomainTeams::class)->addAllForClaim($claim);
     }

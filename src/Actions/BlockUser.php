@@ -40,9 +40,12 @@ class BlockUser
 
             $this->revokeApiTokens($user);
             $this->revokeSessions($user);
-        });
 
-        UserBlocked::dispatch($user);
+            // Raised inside the transaction so the deferred event is carried
+            // by this one rather than by whatever else is open; UserBlocked
+            // says when its listeners may run.
+            UserBlocked::dispatch($user);
+        });
     }
 
     /**

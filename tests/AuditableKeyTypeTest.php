@@ -93,10 +93,24 @@ class AuditableKeyTypeTest extends OrchestraTestCase
 
     public function test_the_audit_trail_of_a_bigint_model_survives_updates_and_deletes(): void
     {
+        // The three entries are ordered by when they happened, so they have to
+        // happen at distinguishable times. audit_logs.created_at is a whole
+        // number of seconds, and all three of these land inside one — leaving
+        // the order to whatever the database returns for a three-way tie,
+        // which is the table's physical layout and changes as rows come and
+        // go. Travelling between them is what makes "ordered by created_at"
+        // mean something.
         $invoice = Invoice::create(['reference' => 'INV-001']);
 
+        $this->travel(1)->seconds();
+
         $invoice->update(['reference' => 'INV-002']);
+
+        $this->travel(1)->seconds();
+
         $invoice->delete();
+
+        $this->travelBack();
 
         $this->assertSame(
             ['created', 'updated', 'deleted'],
