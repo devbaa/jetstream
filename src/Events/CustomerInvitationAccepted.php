@@ -10,18 +10,23 @@ use Illuminate\Foundation\Events\Dispatchable;
 /**
  * Announced once the acceptance is durable, never before.
  *
- * The controller dispatches this after its own transaction returns, which is
- * only the end of the story when nothing else had a transaction open. Laravel
- * transactions nest: run inside an outer one — transaction middleware, a
- * larger workflow, a job that wraps its work — and the controller's is a
- * savepoint whose commit settles nothing. A listener would then read an
- * account no other connection can see, and an outer rollback could take the
- * whole acceptance away after it had already been announced.
+ * Laravel transactions nest. Raised inside an outer one — transaction
+ * middleware, a larger workflow, a job that wraps its work — the acceptance's
+ * own transaction is a savepoint whose commit settles nothing: a listener
+ * would read an account no other connection can see, and an outer rollback
+ * could take the whole acceptance away after it had already been announced.
  *
  * Implementing this hands the decision to the transaction manager instead of
- * to the caller: with no transaction open the event dispatches immediately;
- * with one open it is held until the outermost commit and dropped if that
- * rolls back.
+ * to the caller. With nothing open it dispatches at once; otherwise it is
+ * carried by a transaction and executed when that transaction's connection
+ * commits at the outermost level, or discarded if it rolls back.
+ *
+ * Which transaction carries it is decided when the event is raised, and the
+ * manager is never told which connection the event is about: it attaches the
+ * callback to whichever transaction was begun most recently, across every
+ * connection. Raise this while its own transaction is the newest — from
+ * inside it — or it will be carried by something unrelated, and that
+ * connection's commit will announce an acceptance that is not durable.
  */
 class CustomerInvitationAccepted implements ShouldDispatchAfterCommit
 {

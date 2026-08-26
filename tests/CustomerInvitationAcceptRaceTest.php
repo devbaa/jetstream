@@ -103,6 +103,7 @@ class CustomerInvitationAcceptRaceTest extends OrchestraTestCase
         $this->app->instance('db.transactions', $transactions = new DatabaseTransactionsManager);
 
         DB::connection()->setTransactionManager($transactions);
+        DB::connection(static::OTHER)->setTransactionManager($transactions);
 
         $this->wipe();
     }
@@ -556,6 +557,89 @@ class CustomerInvitationAcceptRaceTest extends OrchestraTestCase
 
         $this->assertSame(0, $this->accountCount());
         $this->assertSame(1, DB::table('customer_invitations')->count(), 'The invitation was consumed by a transaction that rolled back.');
+    }
+
+    public function test_an_unrelated_connection_committing_does_not_announce_the_acceptance(): void
+    {
+        // The manager that decides when an after-commit event fires keeps one
+        // pending list for every connection at once and attaches the callback
+        // to whichever transaction was begun most recently — it is never told
+        // which connection the event belongs to. So the acceptance has to be
+        // announced from inside its own transaction, while that is still the
+        // newest pending one. Announced afterwards, the newest is whatever
+        // else happens to be open, and somebody else's commit sets it off.
+        [, $invitee, $id] = $this->invitation();
+
+        $announced = [];
+
+        $this->recordAnnouncements($announced);
+
+        $other = DB::connection(static::OTHER);
+
+        DB::beginTransaction();
+        $other->beginTransaction();
+
+        try {
+            $this->actingAs($invitee)->get($this->link($id));
+
+            $this->assertSame([], $announced, 'The acceptance was announced while its own transaction was still open.');
+
+            // An unrelated connection finishing has nothing to do with whether
+            // this acceptance is durable.
+            $other->commit();
+
+            $this->assertSame(
+                [],
+                $announced,
+                'The acceptance was announced when an unrelated connection committed.'
+            );
+
+            $this->assertFalse(
+                $other->table('customer_accounts')->exists(),
+                'The account was visible elsewhere before the invitation connection committed.'
+            );
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            if ($other->transactionLevel() > 0) {
+                $other->rollBack();
+            }
+
+            throw $e;
+        }
+
+        $this->assertSame([true], $announced, 'The acceptance was not announced once its own connection committed.');
+    }
+
+    public function test_an_unrelated_commit_cannot_announce_an_acceptance_that_is_then_undone(): void
+    {
+        // The same ordering, ending the way it must never be allowed to end:
+        // the unrelated connection commits, the invitation connection rolls
+        // back, and the acceptance never happened. Nothing may have been told
+        // otherwise in between.
+        [, $invitee, $id] = $this->invitation();
+
+        $announced = [];
+
+        $this->recordAnnouncements($announced);
+
+        $other = DB::connection(static::OTHER);
+
+        DB::beginTransaction();
+        $other->beginTransaction();
+
+        $this->actingAs($invitee)->get($this->link($id));
+
+        $other->commit();
+
+        DB::rollBack();
+
+        $this->assertSame([], $announced, 'An acceptance that was rolled back was announced by an unrelated commit.');
+
+        $this->assertSame(0, $this->accountCount());
+        $this->assertSame(1, DB::table('customer_invitations')->count());
     }
 
     public function test_the_acceptance_is_not_announced_when_it_does_not_happen(): void
