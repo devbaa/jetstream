@@ -15,7 +15,9 @@ use Laravel\Jetstream\Events\DomainClaimVerified;
 use Laravel\Jetstream\Events\UserBlocked;
 use Laravel\Jetstream\Features;
 use Laravel\Jetstream\Jetstream;
+use Laravel\Jetstream\Tests\Fixtures\DomainClaimOnOtherConnection;
 use Laravel\Jetstream\Tests\Fixtures\User;
+use Laravel\Jetstream\Tests\Fixtures\UserOnOtherConnection;
 
 /**
  * An action that wraps its work in a transaction announces it once, afterwards.
@@ -48,6 +50,19 @@ class AfterCommitEventOrderingTest extends OrchestraTestCase
      * The name of the second, independent connection to the same database.
      */
     protected const OTHER = 'jetstream_competitor';
+
+    /**
+     * The configured models as they were before this class touched them.
+     *
+     * useUserModel() and useDomainClaimModel() are static, so a class that
+     * points them at a model on another connection has to put them back:
+     * otherwise every later test in the process resolves its claims and users
+     * over that connection while its fixtures and locks are on the default
+     * one, and the two deadlock.
+     *
+     * @var array{string, string}|null
+     */
+    protected $configuredModels = null;
 
     /** {@inheritdoc} */
     #[\Override]
@@ -93,11 +108,20 @@ class AfterCommitEventOrderingTest extends OrchestraTestCase
         DB::connection()->setTransactionManager($transactions);
         DB::connection(static::OTHER)->setTransactionManager($transactions);
 
+        $this->configuredModels = [Jetstream::userModel(), Jetstream::domainClaimModel()];
+
         $this->wipe();
     }
 
     protected function tearDown(): void
     {
+        if (is_array($this->configuredModels)) {
+            [$user, $claim] = $this->configuredModels;
+
+            Jetstream::useUserModel($user);
+            Jetstream::useDomainClaimModel($claim);
+        }
+
         if (DB::connection()->getDriverName() === 'pgsql') {
             $this->wipe();
 
@@ -334,6 +358,143 @@ class AfterCommitEventOrderingTest extends OrchestraTestCase
         }
 
         $this->assertSame([true], $announced, 'The supersession was not announced once its own connection committed.');
+    }
+
+    public function test_a_block_waits_for_the_connection_the_user_lives_on(): void
+    {
+        // Jetstream::useUserModel() is a documented extension point, so the
+        // model holding blocked_at need not be on the default connection. The
+        // transaction has to be opened on the connection the state actually
+        // lives on: opened on the default one, the event is deferred by a
+        // transaction that has nothing to do with the write, and that
+        // transaction's commit announces a block the user's own connection can
+        // still roll back.
+        Jetstream::useUserModel(UserOnOtherConnection::class);
+
+        $user = UserOnOtherConnection::forceCreate([
+            'name' => 'Blocked',
+            'email' => 'blocked@example.test',
+            'password' => 'secret',
+            'email_verified_at' => now(),
+        ]);
+
+        $announced = [];
+
+        Event::listen(function (UserBlocked $event) use (&$announced): void {
+            // Read from the default connection, which is where anything not
+            // holding the user's transaction stands.
+            $announced[] = DB::connection()
+                ->table('users')
+                ->where('id', $event->user->getKey())
+                ->whereNotNull('blocked_at')
+                ->exists();
+        });
+
+        $other = DB::connection(static::OTHER);
+
+        $other->beginTransaction();
+
+        try {
+            (new BlockUser)->block($user, 'spam');
+
+            $this->assertSame(
+                [],
+                $announced,
+                'The block was announced by a transaction other than the one the user lives on.'
+            );
+
+            $other->commit();
+        } catch (\Throwable $e) {
+            if ($other->transactionLevel() > 0) {
+                $other->rollBack();
+            }
+
+            throw $e;
+        }
+
+        $this->assertSame([true], $announced, 'The block was not announced once the user\'s own connection committed.');
+    }
+
+    public function test_a_block_rolled_back_on_the_user_connection_is_never_announced(): void
+    {
+        Jetstream::useUserModel(UserOnOtherConnection::class);
+
+        $user = UserOnOtherConnection::forceCreate([
+            'name' => 'Blocked',
+            'email' => 'blocked@example.test',
+            'password' => 'secret',
+            'email_verified_at' => now(),
+        ]);
+
+        $announced = [];
+
+        Event::listen(function (UserBlocked $event) use (&$announced): void {
+            $announced[] = $event->user->getKey();
+        });
+
+        $other = DB::connection(static::OTHER);
+
+        $other->beginTransaction();
+
+        (new BlockUser)->block($user, 'spam');
+
+        $other->rollBack();
+
+        $this->assertSame([], $announced, 'A block the user connection rolled back was announced anyway.');
+
+        $this->assertFalse(
+            DB::connection(static::OTHER)->table('users')->where('id', $user->getKey())->whereNotNull('blocked_at')->exists(),
+            'The rolled back block was kept.'
+        );
+    }
+
+    public function test_a_verification_waits_for_the_connection_the_claim_lives_on(): void
+    {
+        // The same for the other model this package lets an application
+        // replace: Jetstream::useDomainClaimModel().
+        Jetstream::useDomainClaimModel(DomainClaimOnOtherConnection::class);
+
+        $owner = $this->createUser('taylor@acme.com');
+
+        $claim = DomainClaimOnOtherConnection::forceCreate([
+            'user_id' => $owner->id,
+            'domain' => 'acme.com',
+            'token' => 'token-other-connection',
+        ]);
+
+        $announced = [];
+
+        Event::listen(function (DomainClaimVerified $event) use (&$announced): void {
+            $announced[] = DB::connection()
+                ->table('domain_claims')
+                ->where('id', $event->claim->getKey())
+                ->whereNotNull('verified_at')
+                ->exists();
+        });
+
+        $other = DB::connection(static::OTHER);
+
+        $other->beginTransaction();
+
+        try {
+            app(VerifyDomainClaim::class)->activate($claim, 'dns');
+
+            $this->assertSame(
+                [],
+                $announced,
+                'The verification was announced by a transaction other than the one the claim lives on.'
+            );
+
+            $other->commit();
+        } catch (\Throwable $e) {
+            if ($other->transactionLevel() > 0) {
+                $other->rollBack();
+            }
+
+            throw $e;
+        }
+
+        $this->assertSame([true], $announced, 'The verification was not announced once the claim\'s own connection committed.');
     }
 
     public function test_each_of_the_three_still_arrives_when_nothing_else_is_open(): void

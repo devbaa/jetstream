@@ -26,13 +26,28 @@ class BlockUser
      * Revocation is deletion rather than a flag, which is what makes unblocking
      * safe: there is nothing left to become valid again.
      *
+     * The transaction is opened on the user's own connection, not the default
+     * one. useUserModel() lets an application put users somewhere else, and
+     * blocked_at is the authoritative state here — so that is the connection
+     * whose commit decides whether the block happened, and the one that must
+     * carry UserBlocked. Opened on the default connection instead, the event
+     * would be deferred by a transaction with no part in the write, and that
+     * transaction's commit would announce a block the user's connection could
+     * still roll back.
+     *
+     * Tokens and database sessions may be configured onto connections of their
+     * own, and those writes are not covered by this transaction. That boundary
+     * is unchanged and is documented in the README: the block itself is atomic,
+     * the revocations that follow it are best-effort against whatever storage
+     * an application put them in.
+     *
      * @param  \App\Models\User  $user
      * @param  string|null  $reason
      * @return void
      */
     public function block($user, $reason = null)
     {
-        DB::transaction(function () use ($user, $reason) {
+        $user->getConnection()->transaction(function () use ($user, $reason) {
             $user->forceFill([
                 'blocked_at' => now(),
                 'blocked_reason' => $reason !== null && $reason !== '' ? $reason : null,
