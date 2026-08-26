@@ -409,11 +409,13 @@ class CustomerInvitationAcceptRaceTest extends OrchestraTestCase
 
     public function test_a_listener_can_see_the_acceptance_it_is_told_about(): void
     {
-        // The event is dispatched after the commit, not from inside it. A
-        // listener that reads the account — a queue worker, another process,
-        // anything not on this connection — would otherwise be handed an
-        // account it cannot find, because nothing outside the transaction can
-        // see it yet. Checked from the second connection, which is exactly the
+        // The event is raised inside the transaction but its listeners run
+        // only after that transaction's connection commits at the outermost
+        // level. Where it is raised decides which transaction carries it;
+        // when the listeners run decides what they can see. A listener that
+        // reads the account — a queue worker, another process, anything not
+        // on this connection — would otherwise be handed an account it cannot
+        // find. Checked from the second connection, which is exactly the
         // position such a listener is in.
         [, $invitee, $id] = $this->invitation();
 
