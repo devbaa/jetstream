@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Laravel\Jetstream\Actions;
 
-use Illuminate\Support\Facades\DB;
 use Laravel\Jetstream\Contracts\VerifiesDomains;
 use Laravel\Jetstream\DomainClaim;
 use Laravel\Jetstream\Events\DomainClaimSuperseded;
@@ -42,10 +41,18 @@ class VerifyDomainClaim
      * superseded claims' recorded activity remains untouched as a historic
      * tree. The domain's verified users are then enrolled into the new
      * master's team.
+     *
+     * The transaction is opened on the claim's own connection, not the default
+     * one. useDomainClaimModel() lets an application put claims somewhere
+     * else, and every read and write here goes through that model — so that is
+     * the connection whose commit decides whether the flag moved, and the one
+     * that must carry DomainClaimVerified and DomainClaimSuperseded. Opened on
+     * the default connection instead, they would be deferred by a transaction
+     * with no part in the writes.
      */
     public function activate(DomainClaim $claim, string $method): void
     {
-        $superseded = DB::transaction(function () use ($claim, $method) {
+        $claim->getConnection()->transaction(function () use ($claim, $method) {
             // Every claim for the domain is locked, not just the active ones.
             // Locking the active ones was the same thing as locking nothing
             // whenever the domain had no admin yet, so two people verifying an
@@ -88,14 +95,15 @@ class VerifyDomainClaim
 
             $claim->recordActivity($claim->user, 'domain:verified', null, ['method' => $method]);
 
-            return $superseded;
+            // Raised inside the transaction so the deferred events are carried
+            // by this one rather than by whatever else is open; both say when
+            // their listeners may run.
+            foreach ($superseded as $previous) {
+                DomainClaimSuperseded::dispatch($previous);
+            }
+
+            DomainClaimVerified::dispatch($claim);
         });
-
-        foreach ($superseded as $previous) {
-            DomainClaimSuperseded::dispatch($previous);
-        }
-
-        DomainClaimVerified::dispatch($claim);
 
         app(AddUserToDomainTeams::class)->addAllForClaim($claim);
     }
