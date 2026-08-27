@@ -14,7 +14,11 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Fortify\Features as FortifyFeatures;
 use Laravel\Fortify\Fortify;
+use Illuminate\Auth\Events\Authenticated;
+use Illuminate\Auth\Events\Login;
+use Laravel\Fortify\Events\TwoFactorAuthenticationChallenged;
 use Laravel\Jetstream\Audit\AuthenticationEventSubscriber;
+use Laravel\Jetstream\Auth\BlockedUsers;
 use Laravel\Jetstream\Contracts\VerifiesDomains;
 use Laravel\Jetstream\Domains\VerifyDomainViaDnsOrMeta;
 use Laravel\Jetstream\Http\Livewire\Admin\TenantManager as AdminTenantManager;
@@ -84,6 +88,7 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->configureCommands();
         $this->configureTenancy();
         $this->configureRateLimiting();
+        $this->configureBlockedUsers();
         $this->configureAuditing();
 
         foreach (['banner' => 'success', 'warningBanner' => 'warning', 'dangerBanner' => 'danger'] as $macro => $style) {
@@ -190,6 +195,24 @@ class JetstreamServiceProvider extends ServiceProvider
             return Limit::perMinute(is_int($attempts) && $attempts > 0 ? $attempts : 6)
                 ->by('ip:'.($request->ip() ?? 'unknown'));
         });
+    }
+
+    /**
+     * Refuse authentication to users who have been blocked.
+     *
+     * Registered before the audit subscriber on purpose. Both listen to Login,
+     * Laravel calls listeners in the order they were registered, and the
+     * refusal throws — so registering the audit first would leave an
+     * authoritative auth.login recorded for an attempt this package goes on to
+     * reject.
+     *
+     * @return void
+     */
+    protected function configureBlockedUsers()
+    {
+        Event::listen(Login::class, [BlockedUsers::class, 'rejectLogin']);
+        Event::listen(Authenticated::class, [BlockedUsers::class, 'rejectAuthenticated']);
+        Event::listen(TwoFactorAuthenticationChallenged::class, [BlockedUsers::class, 'rejectChallenge']);
     }
 
     /**
