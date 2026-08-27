@@ -104,7 +104,10 @@ class GlobalRoleUniquenessTest extends OrchestraTestCase
         $failed = null;
 
         try {
-            $this->insertRole(null, 'support', ['read', 'delete']);
+            // A savepoint of its own: a rejected statement aborts the
+            // surrounding transaction on PostgreSQL, and the suite's per-test
+            // transaction still has to answer the question below.
+            DB::transaction(fn () => $this->insertRole(null, 'support', ['read', 'delete']));
         } catch (QueryException $e) {
             $failed = $e;
         }
