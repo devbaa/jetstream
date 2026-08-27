@@ -5,18 +5,25 @@ declare(strict_types=1);
 namespace Laravel\Jetstream\Tests;
 
 use App\Models\User as AppUser;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
+use Laravel\Fortify\Events\TwoFactorAuthenticationChallenged;
 use Laravel\Fortify\Features as FortifyFeatures;
 use Laravel\Fortify\Fortify;
 use Laravel\Passkeys\Actions\VerifyPasskey;
 use Laravel\Passkeys\Http\Controllers\PasskeyLoginController;
 use Laravel\Passkeys\Passkey;
+use Laravel\Jetstream\Auth\BlockedUsers;
 use Laravel\Jetstream\Jetstream;
+use Laravel\Jetstream\Tests\Fixtures\Admin;
 use Laravel\Jetstream\Tests\Fixtures\StandaloneUser;
 use Laravel\Jetstream\Tests\Fixtures\StubPasskeyVerificationRequest;
 use Laravel\Jetstream\Tests\Fixtures\User;
+use Symfony\Component\HttpFoundation\Cookie;
 
 /**
  * A blocked user may neither establish nor resume authentication.
@@ -52,6 +59,25 @@ class BlockedAuthenticationTest extends OrchestraTestCase
             FortifyFeatures::twoFactorAuthentication(['confirm' => true, 'confirmPassword' => true]),
             FortifyFeatures::passkeys(),
         ]);
+
+        // A second guard authenticating something that is not Jetstream's
+        // user at all — the shape of an application that runs its own admin,
+        // customer or partner authentication alongside this package.
+        $app->config->set('auth.guards.admin', [
+            'driver' => 'session',
+            'provider' => 'admins',
+        ]);
+
+        $app->config->set('auth.providers.admins', [
+            'driver' => 'eloquent',
+            'model' => Admin::class,
+        ]);
+
+        // Both halves, together: the model Jetstream is told to manage is the
+        // model the guard actually retrieves. An application that points one
+        // at a class and leaves the other behind is already inconsistent
+        // everywhere else in this package, and the boundary is no exception.
+        $app->config->set('auth.providers.users.model', User::class);
 
         Jetstream::useUserModel(User::class);
     }
@@ -416,6 +442,113 @@ class BlockedAuthenticationTest extends OrchestraTestCase
         $this->assertFalse(
             Auth::check(),
             'A blocked user of a configured model authenticated with their password.'
+        );
+    }
+
+    public function test_an_unrelated_authenticatable_on_another_guard_is_left_alone(): void
+    {
+        // The other edge of the same boundary. These are Laravel's
+        // authentication events, not Fortify's and not this package's routes,
+        // so they fire for every guard an application has. An application that
+        // authenticates an admin, a customer or a partner on a guard of its own
+        // owns that model's semantics — including whatever it means by a column
+        // it happens to have called blocked_at.
+        //
+        // Jetstream enforces blocking on the model it manages. It does not get
+        // to enforce it on a model it has never heard of.
+        Schema::create('admins', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email');
+            $table->string('password');
+            $table->string('remember_token', 100)->nullable();
+            $table->timestamp('blocked_at')->nullable();
+            $table->timestamps();
+        });
+
+        $this->assertSame(User::class, Jetstream::userModel());
+
+        $this->assertFalse(
+            is_a(Admin::class, Jetstream::userModel(), true),
+            'The fixture is a Jetstream user after all, so this proves nothing.'
+        );
+
+        $admin = Admin::forceCreate([
+            'name' => 'Unrelated',
+            'email' => 'admin@example.test',
+            'password' => bcrypt('secret'),
+            // Non-null, and none of this package's business.
+            'blocked_at' => now(),
+        ]);
+
+        Auth::guard('admin')->login($admin);
+
+        $this->assertTrue(
+            Auth::guard('admin')->check(),
+            'Jetstream refused an authentication on a guard whose model it does not manage.'
+        );
+
+        // And again on the resume path, which is the listener that fires on
+        // every request rather than only at sign-in.
+        $this->app['auth']->forgetGuards();
+
+        $this->assertSame(
+            $admin->getKey(),
+            Auth::guard('admin')->id(),
+            'Jetstream refused to resume an authentication on a guard whose model it does not manage.'
+        );
+
+        // Meanwhile the model it does manage is still blocked, on the same
+        // request, from the same predicate.
+        $this->assertTrue(
+            app(BlockedUsers::class)->isBlocked($this->createUser(blocked: true))
+        );
+    }
+
+    public function test_the_challenge_refusal_acts_on_fortifys_guard_not_the_default_one(): void
+    {
+        // The challenge event carries a user and no guard. Fortify's own
+        // StatefulGuard is bound from config('fortify.guard'), which an
+        // application may point away from the default — and Fortify is what
+        // wrote the half-finished login state a moment earlier, so it is
+        // Fortify's guard whose state is being taken back.
+        //
+        // What separates the two is the recaller. Invalidating the session
+        // clears everything in it whichever guard is named, but a remember
+        // cookie survives session invalidation by design — that is what it is
+        // for — so expiring the default guard's recaller here would sign out
+        // an unrelated, unblocked, remembered user.
+        config()->set('auth.guards.members', ['driver' => 'session', 'provider' => 'users']);
+        config()->set('fortify.guard', 'members');
+
+        $this->assertSame('web', config('auth.defaults.guard'), 'The two guards are the same, so this proves nothing.');
+
+        $user = $this->createUser(blocked: true);
+
+        try {
+            app(BlockedUsers::class)->rejectChallenge(new TwoFactorAuthenticationChallenged($user));
+
+            $this->fail('The challenge was not refused.');
+        } catch (ValidationException) {
+            // The refusal itself is asserted elsewhere; what is under test
+            // here is which guard it cleaned up after.
+        }
+
+        $expired = array_map(
+            fn (Cookie $cookie): string => $cookie->getName(),
+            app('cookie')->getQueuedCookies()
+        );
+
+        $this->assertContains(
+            Auth::guard('members')->getRecallerName(),
+            $expired,
+            "Fortify's own guard kept its remember cookie after the challenge was refused."
+        );
+
+        $this->assertNotContains(
+            Auth::guard('web')->getRecallerName(),
+            $expired,
+            'Refusing a challenge expired the remember cookie of a guard Fortify was not using.'
         );
     }
 }

@@ -7,13 +7,13 @@ namespace Laravel\Jetstream\Auth;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Events\Authenticated;
 use Illuminate\Auth\Events\Login;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\Guard;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Events\TwoFactorAuthenticationChallenged;
 use Laravel\Fortify\Fortify;
+use Laravel\Jetstream\Jetstream;
 
 /**
  * The one place this package decides that a blocked user may not authenticate.
@@ -42,19 +42,30 @@ class BlockedUsers
     /**
      * Whether the given user is blocked.
      *
-     * blocked_at is the state BlockUser writes and the state this package
-     * documents as authoritative, so it is what is read — not a method the
-     * user model may happen to expose. A configured model is entitled to
-     * define isBlocked() with semantics of its own; it is not entitled to
-     * redefine what this package means by blocked.
+     * Scoped to the model Jetstream manages, because the listeners below are
+     * Laravel's, not Fortify's or Jetstream's: they fire for every guard in
+     * the application. An application is free to authenticate something else
+     * entirely on another guard — an App\Models\Admin, a Customer — and that
+     * model's own blocked_at, if it has one, means whatever that application
+     * says it means. Jetstream does not get to enforce its blocking semantics
+     * on a model it does not manage.
+     *
+     * The scope is Jetstream::userModel(), not a hard-coded App\Models\User,
+     * so it follows useUserModel() — that indifference is the point, and was
+     * the defect in the middleware this replaces.
+     *
+     * Within that model, blocked_at is read directly: it is the state
+     * BlockUser writes and the state this package documents as authoritative,
+     * not a method the model may happen to expose. A configured model is
+     * entitled to define isBlocked() with semantics of its own; it is not
+     * entitled to redefine what this package means by blocked.
      */
     public function isBlocked(mixed $user): bool
     {
-        if (! $user instanceof Model) {
-            return false;
-        }
+        $userModel = Jetstream::userModel();
 
-        return $user->getAttribute('blocked_at') !== null;
+        return $user instanceof $userModel
+            && $user->getAttribute('blocked_at') !== null;
     }
 
     /**
@@ -108,6 +119,12 @@ class BlockedUsers
      * decides the outcome — an account blocked between the challenge and the
      * code being entered has to be caught there — but there is no reason to
      * let it into the challenge in the first place.
+     *
+     * The event carries the user and no guard, so the guard has to come from
+     * somewhere. It is Fortify's own — bound from config('fortify.guard'),
+     * which an application may point away from the default — because Fortify
+     * is what wrote login.id a moment before announcing this, and that is the
+     * state being taken back.
      */
     public function rejectChallenge(TwoFactorAuthenticationChallenged $event): void
     {
@@ -115,7 +132,7 @@ class BlockedUsers
             return;
         }
 
-        $this->discard(Auth::guard());
+        $this->discard(app(StatefulGuard::class));
 
         throw ValidationException::withMessages([
             Fortify::username() => [$this->message()],
