@@ -46,7 +46,8 @@
         "psr-4": {
             "Laravel\\Jetstream\\Tests\\": "tests/",
             "App\\": "stubs/app/",
-            "Database\\Factories\\": "database/factories/"
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
         }
     },
     "extra": {

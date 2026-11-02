@@ -217,6 +217,8 @@ Roles are **database-backed** in Jetstream's `{key, name, permissions[]}` shape:
 - The `roles` table holds application defaults where `tenant_id IS NULL` (seeded from your code catalog by `DefaultRolesSeeder`). A tenant may **override** a default key or **add** custom roles; resolution is `tenant row → default row → static Jetstream::$roles` via a request-memoized `RoleRegistry`.
 - Tenant owners manage roles through a Livewire `RoleManager` on the organization settings screen: create custom roles, edit defaults (which transparently creates a per-tenant copy), tick permissions.
 - The `owner` key is **reserved** and always has full access (a synthetic `OwnerRole`). A role that is still assigned to staff cannot be deleted.
+- **A key names one role per scope, and "the application" is a scope.** `roles` is unique on `(tenant_key, key)`, where `tenant_key` is a generated column reading `tenant_id` as a string and `''` when there is none — the plain `(tenant_id, key)` index could not constrain the defaults at all, because NULL is distinct from NULL in a unique index on PostgreSQL, MySQL and sqlite. Two defaults under one key would collapse to one entry in `RoleRegistry` with nothing deciding which, so what a role granted stopped being a property of the role. Tenant overrides and per-tenant keys are untouched: the scopes stay separate.
+- `DefaultRolesSeeder` is therefore free to fail if two nodes seed at once — losing that race means the row you were about to write already exists, and re-running the seeder is the recovery.
 
 The default catalog (customizable in your published `App\Providers\JetstreamServiceProvider`):
 
@@ -537,7 +539,7 @@ Key tables (all UUID v7 keys, all foreign keys indexed):
 | `users` | `name`, `middle_name`, `last_name`, `email`, `phone` + `phone_country` + `phone_verified_at`, `recovery_email` (+ verified), `current_team_id`/`current_tenant_id`/`current_customer_account_id`, `is_system_admin`, `blocked_at`/`blocked_reason`, soft deletes |
 | `tenants` | `user_id` (owner), `slug` (unique), `allow_customer_registration`, `frozen_at`, soft deletes |
 | `tenant_user` | `role`, `frozen_at`, unique `(tenant_id, user_id)` |
-| `roles` | `tenant_id` (nullable = default), `key`, `permissions` (json), unique `(tenant_id, key)` |
+| `roles` | `tenant_id` (nullable = application default), `key`, `permissions` (json), `tenant_key` (generated), unique `(tenant_key, key)` |
 | `customer_accounts` | `tenant_id`, `user_id` (owner), `frozen_at`, soft deletes |
 | `customer_invitations` | `tenant_id`, `customer_account_id` (nullable), `email`, `account_key` (generated), unique `(tenant_id, account_key, email)` |
 | `audit_logs` | `tenant_id`, `user_id`, `event`, `auditable` (uuid morph), `old_values`/`new_values`, `ip_address`, `user_agent` |
@@ -672,6 +674,25 @@ No action is needed on upgrade: both actions and both events are package code.
 ```
 
 `rules()` in the first two takes the target as an argument in the new stubs; compare against `vendor/devbaa/jetstream/stubs/app/Actions/Jetstream/`. The no-argument form is a compatibility path only, and only has any effect at all when tenant features are enabled — with tenancy off the rule answers from the statically registered roles and never asks which tenant is current.
+
+**A role key names one role per scope, the application included.** `roles` was unique over `(tenant_id, key)`. The application's default roles are the rows where `tenant_id` is `NULL`, and NULL is distinct from NULL in a unique index on PostgreSQL, MySQL and sqlite — so the table's only index did not constrain the one group of rows every tenant in the installation shares. Nothing else stood in for it either: `DefaultRolesSeeder` looks for a default before writing one, which decides nothing when two nodes of a rolling deploy run `migrate --seed` at the same moment.
+
+Duplicate defaults are not a cosmetic problem. `RoleRegistry` folds the database rows into an array keyed by role key, so two defaults under one key collapse into one entry, and its query orders only by whether `tenant_id` is null — a question both rows answer identically. Whichever came back last wins, and what a role grants stops being a property of the role.
+
+A generated `tenant_key` column now holds the tenant id, or the empty string when there is none, and the unique index spans `(tenant_key, key)`. It is generated rather than written, so it cannot drift from the tenant it stands for, and it replaces the old index rather than joining it. The plain `tenant_id` index the table was created with stays, because that is what the resolver actually queries. Tenant overrides of a default key, and two tenants each defining the same key, are unaffected — the scopes stay separate.
+
+The migration is published under the tenant tag:
+
+```bash
+php artisan vendor:publish --tag=jetstream-tenant-migrations
+php artisan migrate
+```
+
+Without `--force`. **If your database already holds duplicate application defaults, the migration deletes the extra rows, keeping the oldest of each set** — the index cannot be created over them. Only rows with no tenant can be affected, since the index being replaced already separated every other pair. What the survivor grants may differ from what a deleted twin granted; there is no basis in the data for preferring one, which is the ambiguity being ended rather than a choice being made. Re-run `DefaultRolesSeeder` afterwards and every default is restored to the catalog your application actually declares. Run `select key, count(*) from roles where tenant_id is null group by 1 having count(*) > 1;` first if you want to see what will be collapsed.
+
+`database/seeders/DefaultRolesSeeder.php` **lives in your application and is not replaced by upgrading this package.** Two corrections are worth copying from `vendor/devbaa/jetstream/database/seeders/DefaultRolesSeeder.php`. It passed `tenant_id` to `updateOrCreate`, which mass assigns — and `tenant_id` is deliberately not fillable on the role model, so that no request can choose which tenant a row lands in. An application running Eloquent strictly gets a `MassAssignmentException` out of `db:seed`; one that does not gets the value discarded, and then the tenancy stamp that fires on create decides instead, so a seed run while a tenant was current filed the application's defaults as that tenant's own roles. The new copy states "no tenant" in the query and wraps the write in an explicit tenancy bypass.
+
+With the constraint in place, a seeder that loses a concurrent seed now fails instead of adding a row. That is the intended outcome: losing means the row you were about to write already exists, so re-running the seeder is the whole of the recovery.
 
 This fork intentionally diverges from upstream Jetstream (Inertia removed, single install path, UUID keys, Laravel 13/PHP 8.4 floor). Treat it as a standalone starter.
 

@@ -87,8 +87,9 @@ class CustomerInvitationAccountKeyMigrationTest extends OrchestraTestCase
 
     public function test_postgresql_is_told_to_cast_the_uuid(): void
     {
-        // customer_account_id is a native uuid there, and coalesce insists
-        // both of its branches share a type. Without the cast the generated
+        // customer_account_id is a native uuid there, and coalesce has one
+        // type rather than one per branch — an untyped '' is resolved to the
+        // other branch's, so the expression becomes uuid and the generated
         // column cannot be created at all. PostgreSQL's unqualified varchar is
         // unbounded, so it needs no length.
         $expression = $this->migration()->expression('pgsql');

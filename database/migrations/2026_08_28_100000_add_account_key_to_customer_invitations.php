@@ -53,15 +53,19 @@ return new class extends Migration
      * converts explicitly, so that the expression does not depend on how the
      * server at hand happens to represent a UUID.
      *
-     * Where the column is not a string the cast is not optional, and the two
-     * engines that can be checked here refuse it in different ways.
-     * PostgreSQL requires both branches of coalesce to share a type and will
-     * not convert between them implicitly, so the column cannot be created at
-     * all. SQL Server will convert, and that is worse: coalesce there returns
-     * the operand with the highest data type precedence, and uniqueidentifier
-     * outranks varchar — so it converts the '' branch to uniqueidentifier and
-     * fails on the empty string, which is the one case this column exists to
-     * represent.
+     * Where the column is not a string the cast is not optional. Coalesce has
+     * one type, not one per branch, and both engines that can be reasoned
+     * about here resolve it to the UUID rather than to the string — by
+     * different routes, with the same result on the one value this column
+     * exists to represent.
+     *
+     * On PostgreSQL '' is an untyped literal, so it is resolved to the type of
+     * the other branch. The expression becomes uuid and the column cannot be
+     * created at all; removing the cast produces, verbatim, "invalid input
+     * syntax for type uuid". SQL Server has two typed operands instead and
+     * chooses between them by data type precedence, where uniqueidentifier
+     * outranks varchar — so it converts the '' branch the same way and fails
+     * on the same value.
      *
      * MySQL is cast even though char(36) would coalesce with a string as it
      * stands, and MariaDB with no server here to say which type it would get.
